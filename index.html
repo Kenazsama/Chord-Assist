@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chord Assist — arma, escucha y encadena acordes</title>
+<meta name="description" content="Chord Assist: elige notas en el piano o el diapasón, o arma el acorde por tónica y tipo. Cifrado americano, escalas compatibles, secuencia editable, MIDI y exportación.">
+<meta name="theme-color" content="#08090d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <img src="icon.svg" alt="">
+      </span>
+      <span class="brand-text">Chord Assist</span>
+    </div>
+
+    <div class="topbar-right">
+      <button id="flatBtn" class="chip-btn" title="Sostenidos / bemoles">♯ / ♭</button>
+      <div class="lang-switch" role="group" aria-label="Language / Idioma">
+        <button type="button" class="lang-btn is-active" data-lang="es">ES</button>
+        <button type="button" class="lang-btn" data-lang="en">EN</button>
+      </div>
+      <button id="donateBtn" class="chip-btn" data-i18n="header.donate">Donar</button>
+      <span id="midiPill" class="pill-status" data-on="false">MIDI apagado</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="workspace">
+
+      <div class="shortcut-bar">
+        <span><kbd data-i18n="key.space">Espacio</kbd> <span data-i18n="sc.listen">Escuchar</span></span>
+        <span><kbd>↑</kbd><kbd>↓</kbd> <span data-i18n="sc.transpose">Transponer</span></span>
+        <span><kbd data-i18n="key.esc">Esc</kbd> <span data-i18n="sc.clear">Limpiar</span></span>
+      </div>
+
+      <div class="card picker-card">
+        <div class="picker-grid">
+          <label class="field">
+            <span data-i18n="picker.root">Tónica</span>
+            <select id="rootSel"></select>
+          </label>
+          <label class="field">
+            <span data-i18n="picker.type">Tipo de acorde</span>
+            <select id="typeSel"></select>
+          </label>
+        </div>
+        <p class="picker-hint" data-i18n="picker.hint">El acorde se arma y suena automáticamente. Después puedes ajustarlo nota por nota en el piano o la guitarra.</p>
+      </div>
+
+      <div class="card inst-card">
+        <div class="inst-head">
+          <h2 data-i18n="piano.title">Piano</h2>
+          <span id="pianoRange">C2 – B4</span>
+        </div>
+        <svg id="piano" viewBox="0 0 900 134" preserveAspectRatio="xMidYMid meet" aria-label="Teclado de piano interactivo"></svg>
+      </div>
+
+      <div class="card inst-card">
+        <div class="inst-head">
+          <h2 data-i18n="guitar.title">Guitarra</h2>
+          <div class="mini-seg" id="searchMode" role="group" aria-label="Buscar acordes o escalas">
+            <button type="button" class="mini-btn is-active" data-search="chords" data-i18n="guitar.chords">Acordes</button>
+            <button type="button" class="mini-btn" data-search="scales" data-i18n="guitar.scales">Escalas</button>
+          </div>
+          <span id="guitarInfo">6 cuerdas · 12 trastes</span>
+        </div>
+        <div class="gt-scroll">
+          <svg id="guitar" viewBox="0 0 900 196" preserveAspectRatio="xMidYMid meet" aria-label="Diapasón de guitarra interactivo"></svg>
+        </div>
+        <div class="gt-tools">
+          <button id="strRemove" class="ghost-btn sm" data-i18n="guitar.removeString">－ Cuerda</button>
+          <button id="strAdd" class="ghost-btn sm" data-i18n="guitar.addString">＋ Cuerda</button>
+          <div class="gt-tools-right">
+            <button id="tuneDownAll" class="ghost-btn sm" data-i18n="guitar.tuneAllDown">−1 st</button>
+            <button id="tuneUpAll" class="ghost-btn sm" data-i18n="guitar.tuneAllUp">+1 st</button>
+            <button id="tuneReset" class="ghost-btn sm" data-i18n="guitar.standard">Estándar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card chord-card">
+        <div class="chord-main">
+          <div class="chord-id">
+            <div class="chord-name" id="chordName">Elige notas en el piano o la guitarra, o arma el acorde por tónica y tipo</div>
+            <div class="chord-symbol" id="chordSymbol">—</div>
+            <div class="chord-notes" id="chordNotes"></div>
+            <div class="chord-degrees" id="chordDegrees"></div>
+          </div>
+          <div class="chord-actions">
+            <button id="playBtn" class="play-btn">
+              <span id="playIcon" aria-hidden="true">▶</span>
+              <span id="playLabel" data-i18n="chord.play">Escuchar</span>
+            </button>
+            <button id="chordLoop" class="ghost-btn loop-btn" aria-pressed="false" data-i18n="chord.loop">Loop</button>
+            <button id="addBtn" class="add-btn" data-i18n="chord.add">＋ Agregar</button>
+            <button id="clearBtn" class="ghost-btn" data-i18n="chord.clear">Limpiar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card scale-card">
+        <div class="scale-head">
+          <h2 class="scale-title"><span data-i18n="scale.title">Escala y modos</span> <span id="scaleSub" class="scale-sub"></span></h2>
+          <button id="scalePlay" class="ghost-btn" data-i18n="scale.play">▶ Escala</button>
+        </div>
+        <div id="scaleChips" class="scale-chips"></div>
+        <div class="scale-browser">
+          <span class="scale-browser-label" data-i18n="scale.search">Buscar</span>
+          <select id="scaleRootSel" aria-label="Tónica de la escala"></select>
+          <select id="scaleSel" aria-label="Escala"></select>
+        </div>
+        <div id="scaleNotes" class="scale-notes"></div>
+      </div>
+    </section>
+
+    <aside class="side">
+
+      <div class="card seq-card">
+        <div class="seq-head">
+          <h2 data-i18n="seq.title">Secuencia</h2>
+          <div class="seq-actions">
+            <button id="seqPlay" class="ghost-btn" data-i18n="seq.play">▶ Tocar</button>
+            <button id="seqLoop" class="ghost-btn" aria-pressed="false" data-i18n="seq.loop">Loop</button>
+            <button id="seqClear" class="ghost-btn" data-i18n="seq.clear">Limpiar</button>
+          </div>
+        </div>
+
+        <div class="bpm-row">
+          <span class="slider-label" data-i18n="tempo">Tempo</span>
+          <input id="bpm" type="range" min="40" max="300" step="1" value="96">
+          <input id="bpmNum" class="bpm-num" type="number" min="40" max="300" step="1" value="96" aria-label="BPM">
+          <span class="bpm-unit" data-i18n="tempo.bpm">BPM</span>
+        </div>
+
+        <div class="metro-row">
+          <button id="metroBtn" class="ghost-btn sm">Metrónomo: apagado</button>
+          <button id="metroHalf" class="ghost-btn sm" aria-pressed="false">1/2 BPM</button>
+        </div>
+
+        <div id="steps" class="steps"></div>
+
+        <div class="seq-files">
+          <button id="exportBtn" class="ghost-btn sm" data-i18n="seq.save">⇩ Guardar</button>
+          <button id="importBtn" class="ghost-btn sm" data-i18n="seq.open">⇧ Abrir</button>
+          <input id="importFile" type="file" accept="application/json,.json" hidden>
+        </div>
+      </div>
+
+      <details class="card" open>
+        <summary class="card-title" data-i18n="sound.title">Sonido</summary>
+        <div class="grid-2">
+          <label class="field">
+            <span data-i18n="sound.wave">Timbre</span>
+            <select id="waveform">
+              <option value="triangle" data-i18n="wave.triangle" selected>Triangular</option>
+              <option value="sine" data-i18n="wave.sine">Sinusoidal</option>
+              <option value="sawtooth" data-i18n="wave.sawtooth">Sierra</option>
+              <option value="square" data-i18n="wave.square">Cuadrada</option>
+            </select>
+          </label>
+          <label class="field">
+            <span data-i18n="sound.volume">Volumen</span>
+            <input id="volume" type="range" min="0" max="1" step="0.01" value="0.75">
+          </label>
+        </div>
+
+        <div class="adsr">
+          <label class="slider-row"><span class="slider-label" data-i18n="sound.attack">Ataque</span><input id="attack" type="range" min="0.003" max="0.6" step="0.003" value="0.012"><output id="attackOut">12 ms</output></label>
+          <label class="slider-row"><span class="slider-label" data-i18n="sound.decay">Decay</span><input id="decay" type="range" min="0.02" max="1.2" step="0.01" value="0.22"><output id="decayOut">220 ms</output></label>
+          <label class="slider-row"><span class="slider-label" data-i18n="sound.sustain">Sustain</span><input id="sustain" type="range" min="0.05" max="1" step="0.01" value="0.65"><output id="sustainOut">65%</output></label>
+          <label class="slider-row"><span class="slider-label" data-i18n="sound.release">Release</span><input id="release" type="range" min="0.05" max="2" step="0.01" value="0.42"><output id="releaseOut">420 ms</output></label>
+        </div>
+
+        <label class="slider-row">
+          <span class="slider-label" data-i18n="sound.strum">Rasgueo</span>
+          <input id="strum" type="range" min="0" max="0.12" step="0.005" value="0.025">
+          <output id="strumOut">25 ms</output>
+        </label>
+      </details>
+
+      <details class="card" id="midiCard">
+        <summary class="card-title">
+          <span data-i18n="midi.title">MIDI</span>
+          <span id="midiLock" class="lock-badge" title="Bloqueado">🔒</span>
+        </summary>
+        <div class="midi-row">
+          <button id="midiEnable" class="ghost-btn" data-i18n="midi.enable">Activar MIDI</button>
+          <select id="midiOut" disabled>
+            <option value="">— sin dispositivos —</option>
+          </select>
+        </div>
+        <div class="grid-2">
+          <label class="field">
+            <span data-i18n="midi.channel">Canal</span>
+            <input id="midiChannel" type="number" min="1" max="16" value="1">
+          </label>
+        </div>
+        <p class="status" id="midiStatus"></p>
+        <p class="locked-hint" id="midiLockedHint" data-i18n="midi.unlockHint">La salida MIDI y la exportación se desbloquean con el código de donante.</p>
+      </details>
+
+    </aside>
+  </main>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="modal-backdrop" data-close="1"></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <button class="modal-x" id="modalClose" aria-label="Cerrar">×</button>
+    <h2 id="modalTitle" data-i18n="modal.title">Chord Assist es gratis</h2>
+    <p data-i18n="modal.body">Si la app te resulta útil, puedes invitarme un café y te llevas el código para desbloquear la salida MIDI y la exportación de secuencias.</p>
+
+    <!-- ▼▼ EDITAR ACÁ: tu texto y tu link de donación ▼▼ -->
+    <div class="modal-slot">
+      <p class="edit-me">[ Tu mensaje acá: edita este bloque en index.html ]</p>
+      <a class="modal-link" href="donate.html" target="_blank" rel="noopener" data-i18n="modal.link">Abrir página de donaciones</a>
+    </div>
+    <!-- ▲▲ EDITAR ACÁ ▲▲ -->
+
+    <form class="unlock-form" id="unlockForm">
+      <label class="field">
+        <span data-i18n="modal.unlock">Código de donante</span>
+        <input id="unlockInput" type="text" autocomplete="off" spellcheck="false">
+      </label>
+      <button type="submit" class="play-btn" data-i18n="modal.unlockBtn">Desbloquear</button>
+    </form>
+    <p class="unlock-msg" id="unlockMsg"></p>
+    <button class="ghost-btn modal-later" id="modalLater" data-i18n="modal.close">Cerrar</button>
+  </div>
+</div>
+
+<script src="js/theory.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/midi.js"></script>
+<script src="js/app.js"></script>
+<script>
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () { /* offline opcional */ });
+    });
+  }
+</script>
+</body>
+</html>
