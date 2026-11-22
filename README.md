@@ -142,18 +142,9 @@ index.html#modal=1                                 → ver el modal de donacione
 
 La app es gratis. La **salida MIDI** y la **exportación JSON** se desbloquean con un código de donante.
 
-- Código: **`ChordA`** (se puede cambiar en `PRO_CODE`, en `js/app.js`, y también en `donate.html`).
 - El desbloqueo se guarda en el navegador (`localStorage`).
 - Cada 5 minutos aparece un modal recordatorio con el texto y el enlace que configures.
 
-### Dónde editar tu mensaje y tu link
-
-1. **`index.html`** → busca `EDITAR ACÁ` dentro del modal: reemplaza el párrafo y el enlace.
-2. **`donate.html`** → la página de donaciones completa: busca `EDITAR ACÁ` y cambia el texto y el `href` del botón.
-
-El modal se abre desde el botón **Donar** y cada 5 minutos. Si prefieres una ventana aparte, en `js/app.js` está el comentario con la línea exacta (`window.open(...)`) para cambiarlo.
-
-> ⚠️ **Importante sobre la seguridad.** El código se valida en el navegador, así que cualquiera que abra el código fuente puede verlo. Sirve como recordatorio amable para quien usa la app, no como protección real. Si quieres cobrar en serio, la alternativa es validar el código en un servidor o usar una plataforma de licencias (Gumroad, Lemon Squeezy, Stripe + un endpoint propio): la app manda el código, el servidor responde sí/no. Ese cambio se hace solo en `tryUnlock()` y `isPro()`.
 
 ## Bajo
 
@@ -230,26 +221,6 @@ Debajo de las escalas hay un secuenciador de **8 filas × 16 columnas**: las cua
 - Incluye un motor de sonido básico (bombo, redoblante, hi-hat y plato) para escucharlo sin DAW.
 - El ritmo **se guarda con cada acorde** en la secuencia, igual que la escala, y viaja en el JSON.
 
-## Cómo está armado
-
-```
-index.html            estructura y modal de donaciones
-donate.html           página de donaciones (editable)
-css/styles.css        tema oscuro, layout responsive
-js/theory.js          46 acordes y 37 escalas, identificación, grados (sin DOM)
-js/i18n.js            textos en castellano neutro e inglés
-js/audio.js           sintetizador Web Audio: voces, ADSR, reverb, melodías
-js/midi.js            Web MIDI out (manda las mismas notas que suenan)
-js/app.js             estado, piano, guitarra, acorde, escalas, secuencia, desbloqueo
-tests/theory.test.js  pruebas del núcleo musical (node tests/theory.test.js)
-sw.js                 cache offline
-manifest.webmanifest  PWA
-```
-
-El estado central es un conjunto de **notas MIDI**. De ahí salen las pitch classes, el bajo, el cifrado, el piano, la guitarra y la secuencia.
-
-La identificación prueba las 12 raíces contra los 46 acordes y, cuando hay ambigüedad, **prioriza la raíz que coincide con el bajo**: `C-E-G-A` con Do en el bajo es `C6`; con La en el bajo es `Am7`.
-
 ## Límites conocidos
 
 - **Web MIDI** requiere `localhost` o `https`; con `file://` el botón avisa y no funciona.
@@ -257,10 +228,3 @@ La identificación prueba las 12 raíces contra los 46 acordes y, cuando hay amb
 - Algunas escalas exóticas tienen variantes según el libro de referencia.
 - El audio del navegador tiene ~10 ms de latencia: ideal para practicar, no para grabación sample-accurate.
 
-## Próximos pasos posibles
-
-1. Validación de códigos en servidor (licencias reales).
-2. Presets de afinación con nombre ("D♯ estándar", "Drop D", "7 cuerdas B").
-3. Exportar también a MIDI / WAV.
-4. Arpegiador y patrones de ritmo para la secuencia.
-5. Empaquetado como app de escritorio con Tauri.
