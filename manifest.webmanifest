@@ -1,0 +1,20 @@
+{
+  "name": "Chord Assist",
+  "short_name": "Chord Assist",
+  "description": "Arma acordes tocando el piano o el diapasón, o elige tónica y tipo. Cifrado americano, escalas, secuencia editable, MIDI y exportación.",
+  "lang": "es",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#08090d",
+  "theme_color": "#08090d",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
