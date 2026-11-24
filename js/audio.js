@@ -35,6 +35,9 @@
     chord: { waveform: null, gain: 1 },
     seq: { waveform: null, gain: 1 },
     scale: { waveform: 'sine', gain: 0.65 },
+    arp: { waveform: 'sine', gain: 0.65 },
+    seqarp: { waveform: 'sine', gain: 0.8 },
+    triad: { waveform: 'sine', gain: 0.65 },
     bass: { waveform: 'triangle', gain: 0.9 }
   };
 
@@ -42,11 +45,16 @@
     chord: { voices: new Set(), end: null, loop: null, loopState: null, active: false },
     seq: { voices: new Set(), end: null, pat: null, active: false },
     scale: { voices: new Set(), end: null, mel: null, active: false },
+    arp: { voices: new Set(), end: null, mel: null, active: false },
+    seqarp: { voices: new Set(), end: null, pat: null, active: false },
+    triad: { voices: new Set(), end: null, mel: null, active: false },
     bass: { voices: new Set(), end: null, pat: null, active: false }
   };
 
   let currentNotes = [];
   let drum = null;
+  let stepsSeq = null;
+  let onStepsTick = null;
   let noiseBuf = null;
   let onDrumHit = null;
   let activeMode = 'block';
@@ -230,8 +238,12 @@
     stopLayer('chord');
     stopLayer('seq');
     stopLayer('scale');
+    stopLayer('arp');
+    stopLayer('seqarp');
+    stopLayer('triad');
     stopLayer('bass');
     stopDrum();
+    stopSteps();
   }
 
   /* ---------- Acorde (capa chord) ---------- */
@@ -283,14 +295,15 @@
   }
 
   /* ---------- Escala (capa scale) ---------- */
-  function melTick() {
-    const m = L.scale.mel;
-    if (!m) return;
+  function melTick(name) {
+    const l = L[name];
+    if (!l || !l.mel) return;
+    const m = l.mel;
     const horizon = ctx.currentTime + 0.22;
     let guard = 0;
     while (m.nextTime < horizon && guard++ < 32) {
       const note = m.notes[m.index % m.notes.length];
-      spawn(note, m.nextTime, m.step * 0.95, 0.9, 'scale');
+      spawn(note, m.nextTime, m.step * 0.95, 0.9, name);
       m.index++;
       m.nextTime += m.step;
       if (!m.repeat && m.index >= m.notes.length) {
@@ -300,16 +313,18 @@
     }
   }
 
-  /* notes en orden; opts: { stepMs, startTime, repeat } */
+  /* notes en orden; opts: { stepMs, startTime, repeat, totalDur, layer } */
   function melody(notes, opts) {
     ensure();
-    stopLayer('scale');
     const o = opts || {};
+    const name = o.layer || 'scale';
+    const l = L[name] || L.scale;
+    stopLayer(name);
     const list = (notes || []).slice();
     if (!list.length) return;
 
     const step = Math.max(0.05, (o.stepMs || 250) / 1000);
-    L.scale.mel = {
+    l.mel = {
       notes: list,
       index: 0,
       step: step,
@@ -317,22 +332,22 @@
       nextTime: o.startTime || (ctx.currentTime + 0.06),
       timer: null
     };
-    L.scale.active = true;
-    L.scale.mel.timer = setInterval(melTick, 25);
-    melTick();
+    l.active = true;
+    l.mel.timer = setInterval(() => melTick(name), 25);
+    melTick(name);
 
     if (o.totalDur) {
       const from = (o.startTime || ctx.currentTime) - ctx.currentTime;
       const ms = Math.max(150, (from + o.totalDur) * 1000);
-      L.scale.end = setTimeout(() => {
-        stopLayer('scale');
-        if (onEnd) onEnd('scale');
+      l.end = setTimeout(() => {
+        stopLayer(name);
+        if (onEnd) onEnd(name);
       }, ms);
     } else if (!o.repeat) {
       const total = ((list.length - 1) * step + step + Settings.release + 0.1) * 1000;
-      L.scale.end = setTimeout(() => {
-        stopLayer('scale');
-        if (onEnd) onEnd('scale');
+      l.end = setTimeout(() => {
+        stopLayer(name);
+        if (onEnd) onEnd(name);
       }, Math.max(200, total));
     }
   }
@@ -527,6 +542,63 @@
     }
   }
 
+  /* Secuencia de pasos: cada paso es un array de notas MIDI */
+  function stepsTick() {
+    if (!stepsSeq) return;
+    const s = stepsSeq;
+    const horizon = ctx.currentTime + 0.25;
+    let guard = 0;
+    while (s.nextTime < horizon &&
+           (s.endTime == null || s.nextTime < s.endTime) &&
+           guard++ < 16) {
+      const notes = s.steps[s.index % s.steps.length];
+      if (notes && notes.length) {
+        playBlock(notes, s.nextTime, s.dur, s.layer);
+        if (onStepsTick) onStepsTick(notes, s.nextTime, s.dur);
+      }
+      s.nextTime += s.stepDur;
+      s.index++;
+    }
+    if (s.endTime != null && s.nextTime >= s.endTime) {
+      if (s.timer) clearInterval(s.timer);
+      s.timer = null;
+    }
+  }
+
+  function playSteps(steps, opts) {
+    ensure();
+    stopSteps();
+    const o = opts || {};
+    const name = o.layer || 'arp';
+    const list = (steps || []).slice();
+    if (!list.length) return;
+
+    const stepDur = Math.max(0.04, (o.stepMs || 150) / 1000);
+    const dur = Math.max(0.03, (o.durMs || stepDur * 0.9) / 1000);
+    const start = Math.max(ctx.currentTime + 0.05, o.startTime || ctx.currentTime + 0.06);
+
+    stepsSeq = {
+      steps: list,
+      layer: name,
+      stepDur: stepDur,
+      dur: dur,
+      nextTime: start,
+      endTime: o.totalDur ? start + o.totalDur : null,
+      index: 0,
+      timer: null
+    };
+    stepsSeq.timer = setInterval(stepsTick, 25);
+    stepsTick();
+  }
+
+  function stopSteps() {
+    if (!stepsSeq) return;
+    const name = stepsSeq.layer;
+    if (stepsSeq.timer) clearInterval(stepsSeq.timer);
+    stepsSeq = null;
+    stopLayer(name);
+  }
+
   function stopDrum() {
     if (!drum) return;
     if (drum.timer) clearInterval(drum.timer);
@@ -600,6 +672,8 @@
     pattern,
     drumStart,
     stopDrum,
+    playSteps,
+    stopSteps,
     setDrumVolume,
     clickAt,
     now,
@@ -613,6 +687,8 @@
     get onEnd() { return onEnd; },
     set onEnd(fn) { onEnd = fn; },
     get onDrumHit() { return onDrumHit; },
-    set onDrumHit(fn) { onDrumHit = fn; }
+    set onDrumHit(fn) { onDrumHit = fn; },
+    get onStepsTick() { return onStepsTick; },
+    set onStepsTick(fn) { onStepsTick = fn; }
   };
 })(window);

@@ -72,6 +72,7 @@
           <div class="mini-seg" id="searchMode" role="group" aria-label="Buscar acordes o escalas">
             <button type="button" class="mini-btn is-active" data-search="chords" data-i18n="guitar.chords">Acordes</button>
             <button type="button" class="mini-btn" data-search="scales" data-i18n="guitar.scales">Escalas</button>
+            <button type="button" class="mini-btn" data-search="arpeggios" data-i18n="guitar.arps">Arpegios</button>
           </div>
           <span id="guitarInfo">6 cuerdas · 12 trastes</span>
         </div>
@@ -81,11 +82,23 @@
         <div class="gt-tools">
           <button id="strRemove" class="ghost-btn sm" data-i18n="guitar.removeString">－ Cuerda</button>
           <button id="strAdd" class="ghost-btn sm" data-i18n="guitar.addString">＋ Cuerda</button>
+          <button id="scaleClearProbe" class="ghost-btn sm" data-i18n="scale.clearProbe" hidden>Limpiar escala</button>
           <div class="gt-tools-right">
             <button id="tuneDownAll" class="ghost-btn sm" data-i18n="guitar.tuneAllDown">−1 st</button>
             <button id="tuneUpAll" class="ghost-btn sm" data-i18n="guitar.tuneAllUp">+1 st</button>
             <button id="tuneReset" class="ghost-btn sm" data-i18n="guitar.standard">Estándar</button>
           </div>
+        </div>
+      </div>
+
+      <div class="card open-card" data-card="open">
+        <div class="open-head">
+          <h2 data-i18n="open.title">Acorde abierto</h2>
+        </div>
+        <p class="open-tuning" data-i18n="open.tuning">Afinación estándar · MI 440 Hz</p>
+        <div class="open-name" id="openName"></div>
+        <div class="open-body">
+          <svg id="openChord" viewBox="0 0 160 190" role="img" aria-label="Digitación de acorde abierto"></svg>
         </div>
       </div>
 
@@ -104,6 +117,7 @@
             </button>
             <button id="chordLoop" class="ghost-btn loop-btn" aria-pressed="false" data-i18n="chord.loop">Loop</button>
             <button id="addBtn" class="add-btn" data-i18n="chord.add">＋ Agregar</button>
+            <button id="genSong" class="ghost-btn" data-i18n="gen.button">✨ Generar canción</button>
             <button id="cancelEdit" class="ghost-btn" hidden data-i18n="chord.cancelEdit">Cancelar</button>
             <button id="clearBtn" class="ghost-btn" data-i18n="chord.clear">Limpiar</button>
           </div>
@@ -126,6 +140,7 @@
               <option value="verse" data-i18n="section.verse">Verso</option>
               <option value="chorus" data-i18n="section.chorus">Estribillo</option>
               <option value="bridge" data-i18n="section.bridge">Puente</option>
+              <option value="interlude" data-i18n="section.interlude">Interludio</option>
               <option value="solo" data-i18n="section.solo">Solo</option>
               <option value="outro" data-i18n="section.outro">Outro</option>
               <option value="section" selected data-i18n="section.section">Sección</option>
@@ -138,13 +153,14 @@
 
       <div class="card scale-card" data-card="scale">
         <div class="scale-head">
-          <h2 class="scale-title"><span data-i18n="scale.title">Escala y modos</span> <span id="scaleSub" class="scale-sub"></span></h2>
-          <div class="scale-actions">
-            <button id="scaleAuto" class="ghost-btn sm" aria-pressed="false" data-i18n="scale.autoplay">Auto</button>
-            <button id="scaleLoop" class="ghost-btn sm" aria-pressed="false" data-i18n="scale.loop">Loop</button>
-            <button id="scalePlay" class="ghost-btn" data-i18n="scale.play">▶ Escala</button>
-          </div>
+          <h2 class="scale-title"><span data-i18n="scale.cardTitle">Escalas, modos y arpegios</span> <span id="scaleSub" class="scale-sub"></span></h2>
         </div>
+
+        <div class="block-vol">
+          <span data-i18n="scale.volume">Volumen</span>
+          <input id="scaleVol" type="range" min="0" max="1" step="0.01" value="0.65" aria-label="Volumen de la escala" data-i18n-title="scale.volume">
+        </div>
+
         <div class="scale-controls">
           <select id="scaleWave" aria-label="Timbre de la escala">
             <option value="sine" selected data-i18n="wave.sine">Sinusoidal</option>
@@ -152,7 +168,6 @@
             <option value="sawtooth" data-i18n="wave.sawtooth">Sierra</option>
             <option value="square" data-i18n="wave.square">Cuadrada</option>
           </select>
-          <input id="scaleVol" type="range" min="0" max="1" step="0.01" value="0.65" aria-label="Volumen de la escala" data-i18n-title="scale.volume">
           <select id="scalePattern" aria-label="Patrón de la escala">
             <option value="upDown" selected data-i18n="pat.upDown">Subida y bajada</option>
             <option value="up" data-i18n="pat.up">Subida</option>
@@ -166,14 +181,76 @@
           <button id="scaleSpeed" class="ghost-btn sm" data-i18n-title="scale.speed">×1</button>
           <button id="scaleOctDown" class="ghost-btn sm" data-i18n-title="scale.octDown">−8va</button>
           <button id="scaleOctUp" class="ghost-btn sm" data-i18n-title="scale.octUp">+8va</button>
+          <span class="scale-right">
+            <button id="selClear" class="ghost-btn sm" data-i18n-title="sel.clear">×</button>
+            <button id="scaleAuto" class="ghost-btn sm" aria-pressed="false" data-i18n="scale.autoplay">Auto</button>
+            <button id="scaleLoop" class="ghost-btn sm" aria-pressed="false" data-i18n="scale.loop">Loop</button>
+            <button id="scalePlay" class="ghost-btn" data-i18n="scale.play">▶ Escala</button>
+          </span>
         </div>
+
         <div id="scaleChips" class="scale-chips"></div>
+
         <div class="scale-browser">
           <span class="scale-browser-label" data-i18n="scale.search">Buscar</span>
           <select id="scaleRootSel" aria-label="Tónica de la escala"></select>
           <select id="scaleSel" aria-label="Escala"></select>
         </div>
         <div id="scaleNotes" class="scale-notes"></div>
+
+        <div class="block arp-block">
+          <div class="block-head">
+            <span class="block-title" data-i18n="arp.title">Arpegios</span>
+            <div class="arp-actions">
+              <button id="arpOctDown" class="ghost-btn sm" data-i18n-title="arp.octDown">−8va</button>
+              <button id="arpOctUp" class="ghost-btn sm" data-i18n-title="arp.octUp">+8va</button>
+              <button id="arpSpeed" class="ghost-btn sm" data-i18n-title="arp.speed">×1</button>
+              <span class="scale-right">
+                <button id="arpAuto" class="ghost-btn sm" aria-pressed="false" data-i18n="arp.auto">Auto</button>
+                <button id="arpLoop" class="ghost-btn sm" aria-pressed="false" data-i18n="arp.loop">Loop</button>
+                <button id="arpPlay" class="ghost-btn sm" data-i18n-title="arp.play">▶</button>
+              </span>
+            </div>
+          </div>
+          <div id="arpBody" class="arp-body"></div>
+          <div class="arp-triad-row">
+            <span class="arp-label" data-i18n="arp.triads">Tríadas</span>
+            <div class="triad-col">
+              <span id="arpTriads" class="arp-chips"></span>
+              <div class="arp-actions triad-actions">
+                <button id="triadOctDown" class="ghost-btn sm" data-i18n-title="arp.octDown">−8va</button>
+                <button id="triadOctUp" class="ghost-btn sm" data-i18n-title="arp.octUp">+8va</button>
+                <button id="triadSpeed" class="ghost-btn sm" data-i18n-title="triad.speed">×1</button>
+                <span class="scale-right">
+                  <button id="triadAuto" class="ghost-btn sm" aria-pressed="false" data-i18n="arp.auto">Auto</button>
+                  <button id="triadLoop" class="ghost-btn sm" aria-pressed="false" data-i18n="arp.loop">Loop</button>
+                  <button id="triadPlay" class="ghost-btn sm" data-i18n-title="triad.play">▶</button>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card seqarp-card" data-card="seqarp">
+        <div class="seqarp-head">
+          <h2 data-i18n="seqarp.title">Arpegiador</h2>
+          <div class="seqarp-actions">
+            <select id="seqarpCols" aria-label="Columnas">
+              <option value="16" selected>16</option>
+              <option value="32">32</option>
+            </select>
+            <input id="seqarpVol" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Volumen del arpegiador" data-i18n-title="seqarp.volume">
+            <button id="seqarpSpeed" class="ghost-btn sm" data-i18n-title="seqarp.speed">×1</button>
+            <button id="seqarpAuto" class="ghost-btn sm" aria-pressed="false" data-i18n="seqarp.auto">Auto</button>
+            <button id="seqarpClear" class="ghost-btn sm" data-i18n="seqarp.clear">Limpiar</button>
+            <button id="seqarpPlay" class="ghost-btn sm" data-i18n-title="seqarp.play">▶</button>
+          </div>
+        </div>
+        <div class="seqarp-body">
+          <div id="seqarpPiano" class="seqarp-piano"></div>
+          <div id="seqarpGrid" class="seqarp-grid"></div>
+        </div>
       </div>
 
       <div class="card bass-card" data-card="bass">
@@ -276,6 +353,9 @@
 
         <div id="steps" class="steps"></div>
 
+        <div class="seq-file">
+          <span class="seq-file-name" id="seqFileName">Untitled</span>
+        </div>
         <div class="seq-files">
           <button id="exportBtn" class="ghost-btn sm" data-i18n="seq.save">⇩ Guardar</button>
           <button id="importBtn" class="ghost-btn sm" data-i18n="seq.open">⇧ Abrir</button>
@@ -361,6 +441,7 @@
       </label>
       <button type="submit" class="play-btn" data-i18n="modal.unlockBtn">Desbloquear</button>
     </form>
+    <a class="play-btn buy-btn" id="buyLink" href="#" target="_blank" rel="noopener" data-i18n="modal.buy" hidden>Comprar licencia</a>
     <p class="unlock-msg" id="unlockMsg"></p>
     <button class="ghost-btn modal-later" id="modalLater" data-i18n="modal.close">Cerrar</button>
   </div>

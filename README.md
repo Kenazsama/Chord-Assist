@@ -50,7 +50,9 @@ Dos cajas: **tónica** (C…B) y **tipo de acorde** (46 tipos agrupados en tría
 Debajo del acorde aparecen las escalas que contienen todas sus notas, de la más idiomática a la más exótica. Sobre `Cmaj7`: *Jónica*, *Lidia*, *Mayor armónica*…; sobre `C7`: *Mixolidia*, *Lidia dominante*, *Frigia dominante*…
 
 - **Ámbar** = notas del acorde · **Verde agua** = notas de la escala que no están en el acorde · **Gris** = fuera de la escala.
-- En el modo **Escalas**, los puntos del diapasón muestran el **nombre de la nota** y la tónica de la escala lleva un **punto rojo**; en **Acordes** vuelven a mostrar el grado (`1`, `3`, `5`…).
+- En el modo **Escalas** podés **agregar notas propias** para buscar escalas con ellas: esas notas se suman a la búsqueda pero **nunca modifican el acorde**, que se muestra en amarillo tenue y no se puede quitar desde esta solapa. La tónica de la escala lleva un punto rojo.
+- En **Acordes**, las notas de la escala se ven como **puntos grises apagados** (ya no en azul).
+- En **Arpegios** solo se dibujan las notas del arpegio elegido, como puntos blancos.
 - **▶ Escala** la toca subiendo y bajando una octava (también por MIDI), con estos controles:
   - **Loop**: la repite indefinidamente (antes se cortaba en la primera vuelta, ya está corregido).
   - **Auto**: la reproduce sola cada vez que arranca un acorde o un paso de la secuencia.
@@ -84,11 +86,13 @@ Los siete modos griegos, menor armónica y melódica, pentatónicas, blues, tono
   - **1/1 · 1/2 · 1/4 · 1/8** = **la figura con la que se golpea** dentro de esos compases: redonda (una vez por compás), blanca (dos), negra (cuatro) o corchea (ocho).
   - Ejemplo: `Emaj7 ×4` con `1/4` suena 16 veces (4 compases × 4 negras) sin tener que copiar el paso.
 - **↑ ↓** para moverlo, **⧉** para copiarlo, **✎** para editarlo y **×** para borrarlo.
-- Al entrar en edición el lápiz pasa a ser un **disquete 💾**: al hacer clic otra vez guarda los cambios de ese acorde y su configuración.
+Para editar un acorde: hacés clic en el paso (se carga con toda su configuración), cambiás lo que quieras en las tarjetas y apretás el **lápiz de ese paso**: se guarda en el acto, en su mismo lugar.
 - El **＋** del encabezado agrega el acorde actual sin bajar hasta la tarjeta del acorde.
+- **✨ Generar canción**: crea una canción completa al azar (tónica y modo al azar, progresiones diatónicas típicas) con estructura de Intro, Verso, Estribillo, Puente, Interludio, Verso 2, Estribillo 2 y Outro. Pide confirmación porque **borra la secuencia actual**.
 - **✎ Editar** carga ese acorde (con su escala y su ritmo) en el editor: cambias una nota, la escala o el ritmo y guardas con **✓ Guardar** en el mismo lugar de la secuencia. **Cancelar** o `Esc` salen sin tocar nada.
 - **▶ Tocar** reproduce la secuencia al tempo del panel **desde el acorde seleccionado** en adelante (si no hay ninguno, arranca del primero); **Loop** la repite.
 - **⇩ Guardar / ⇧ Abrir**: descarga la secuencia en JSON (con acordes, escalas, compases, figuras, BPM y afinación) o la vuelve a cargar.
+- Arriba de esos botones se ve el **nombre del archivo**: `Untitled` mientras no cargues nada, y el nombre del JSON que abriste después. Al guardar, el navegador propone ese mismo nombre.
 
 ## Metrónomo
 
@@ -138,13 +142,33 @@ index.html#modal=1                                 → ver el modal de donacione
 - `tune`: afinación, de la 1ª cuerda a la más grave
 - `lang`: `es` o `en`
 
+## Desbloqueo y licencias
+
+La app se desbloquea con un **código de licencia** que llega por email después de pagar con PayPal.
+
+- Al tocar **Desbloquear** se envía el código a `POST /api/license/verify` del bot (`js/app.js` → `LICENSE_API`).
+- Si el bot responde `{valid:true}`, la app guarda el código en `localStorage` y habilita Pro (MIDI + exportar JSON).
+- La llave maestra histórica `ChordA` sigue funcionando como código de soporte.
+- El botón **Comprar licencia** del modal aparece cuando configurás `PAYPAL_LINK` en `js/app.js`.
+
+El servidor está en la carpeta `paypal-bot/` de este repositorio (ver su README para desplegarlo en el VPS).
+
 ## Desbloqueo y donaciones
 
 La app es gratis. La **salida MIDI** y la **exportación JSON** se desbloquean con un código de donante.
 
+- Código: **`ChordA`** (se puede cambiar en `PRO_CODE`, en `js/app.js`, y también en `donate.html`).
 - El desbloqueo se guarda en el navegador (`localStorage`).
 - Cada 5 minutos aparece un modal recordatorio con el texto y el enlace que configures.
 
+### Dónde editar tu mensaje y tu link
+
+1. **`index.html`** → busca `EDITAR ACÁ` dentro del modal: reemplaza el párrafo y el enlace.
+2. **`donate.html`** → la página de donaciones completa: busca `EDITAR ACÁ` y cambia el texto y el `href` del botón.
+
+El modal se abre desde el botón **Donar** y cada 5 minutos. Si prefieres una ventana aparte, en `js/app.js` está el comentario con la línea exacta (`window.open(...)`) para cambiarlo.
+
+> ⚠️ **Importante sobre la seguridad.** El código se valida en el navegador, así que cualquiera que abra el código fuente puede verlo. Sirve como recordatorio amable para quien usa la app, no como protección real. Si quieres cobrar en serio, la alternativa es validar el código en un servidor o usar una plataforma de licencias (Gumroad, Lemon Squeezy, Stripe + un endpoint propio): la app manda el código, el servidor responde sí/no. Ese cambio se hace solo en `tryUnlock()` y `isPro()`.
 
 ## Bajo
 
@@ -171,6 +195,49 @@ La tarjeta **Sugerencias** propone acordes para seguir la progresión que tienes
 5. **De paso**: disminuidos que resuelven por semitono al acorde siguiente.
 
 Arriba a la derecha está **Auto**: deduce la tonalidad a partir de tus acordes (le da peso al primero). Si lo apagas, puedes fijar **tónica** y **escala** a mano y las propuestas se calculan sobre esa base. Cada cuadro se puede escuchar con un clic y queda cargado en el editor, listo para **Agregar**.
+
+## Arpegios y arpegiador
+
+La tarjeta **Escalas, modos y arpegios** ordena todo de arriba abajo: **volumen compartido**, la fila de controles de la escala (timbre, patrón, semilla, velocidad, octavas, Auto, Loop y ▶), las escalas sugeridas, el buscador, las notas y, al final, el bloque de **Arpegios** con sus propios controles. Escala y arpegios comparten motor, timbre, volumen y canal MIDI.
+
+### Arpegios
+
+La tarjeta **Arpegios** propone arpegios y tríadas para el acorde actual:
+
+La tarjeta **Arpegios** propone arpegios y tríadas para el acorde actual:
+
+- **Del acorde**: su tríada y, si tiene, su séptima.
+- **De la escala**: tríadas armadas sobre la tónica de escalas que contienen el acorde (por ejemplo, sobre un D♯dim propone F♯ dórica o B mixolidia). Se priorizan las que comparten notas con el acorde.
+
+Al elegir uno, el diapasón pasa solo al modo **Arpegios** y dibuja **todas las posiciones** del arpegio en los 12 trastes con puntos blancos (la nota raíz lleva el aro ámbar), así no queda ninguna cuerda sin opciones.
+
+- **▶** lo escucha subiendo **dos octavas** desde la raíz y volviendo a bajar; **×1 / ×2 / ×4** cambia la velocidad.
+- **Loop** lo repite sin parar y **Auto** lo dispara solo cada vez que arranca un acorde o un paso de la secuencia.
+- **−8va / +8va** transponen la ejecución una octava sin cambiar el dibujo del diapasón.
+- Usa el **timbre, volumen y canal MIDI de la escala** (no tiene controles propios).
+
+Los botones **Auto** de la escala, el arpegio y la tríada, y **el arpegio elegido en la lista**, se guardan dentro de cada acorde de la secuencia: al cargar un paso se restauran sus valores.
+
+El botón **×** de la fila de controles quita todas las selecciones (escala manual, arpegio y tríada) para dejar el diapasón limpio; además, volver a tocar una propuesta o una tríada ya elegida también la deselecciona.
+
+### Tríadas
+
+Debajo de las propuestas de arpegios hay cuatro tríadas sobre la tónica del acorde: **mayor, menor, aumentada y disminuida**. Al elegir una se dibuja en **rojo** sobre el diapasón junto al arpegio en blanco: fuerte en las **tres primeras cuerdas** y más apagada en el resto, para ver todas sus posiciones. Tiene su propio reproductor con **−8va · +8va · ×1 · Auto · Loop · ▶** y sale por el mismo canal MIDI que la escala y los arpegios.
+
+### Arpegiador
+
+La tarjeta **Arpegiador** es un piano roll de una octava con una grilla de pasos:
+
+- A la izquierda, las 12 teclas de la octava; las que no pertenecen a la escala activa quedan apagadas y **no se pueden pintar**.
+- A la derecha, 16 o 32 columnas. Cada clic enciende la celda y le asigna una **octava (1–4)**; los clics siguientes la suben y al cuarto clic se apaga.
+- **▶** lo reproduce en loop al tempo de la app (cada columna es una semicorchea, con **×1 / ×2 / ×4** de velocidad).
+- Tiene **volumen propio** y botón **Auto** (lo dispara al empezar cada acorde). Sus parámetros —columnas, velocidad, volumen, Auto y todas las celdas— **se guardan dentro de cada acorde** de la secuencia y viajan en el JSON.
+- Sale por **MIDI en el canal de la escala y los arpegios** (2 por defecto).
+- El piano muestra las teclas negras más cortas, como un piano real, y cada celda se pinta según su octava: rojo oscuro para la grave, rojo claro para la aguda.
+
+## Acorde abierto
+
+La tarjeta **Acorde abierto** dibuja la digitación clásica del acorde actual en los **primeros 4 trastes**: cuerdas al aire con ○, cuerdas que no deben sonar con ×, y los trastes pisados con su número. El nombre va centrado arriba del dibujo y se muestra en cifrado americano en inglés y en castellano (Do mayor, La menor…) en español, con la aclaración de que es **afinación estándar · MI 440 Hz**. Usa las posiciones tradicionales de los acordes abiertos (C, A, G, E, D, Am, Em, Dm, sus séptimas y algunos más); si el acorde no tiene una digitación abierta, lo indica.
 
 ## Estructura de la canción
 
@@ -221,6 +288,26 @@ Debajo de las escalas hay un secuenciador de **8 filas × 16 columnas**: las cua
 - Incluye un motor de sonido básico (bombo, redoblante, hi-hat y plato) para escucharlo sin DAW.
 - El ritmo **se guarda con cada acorde** en la secuencia, igual que la escala, y viaja en el JSON.
 
+## Cómo está armado
+
+```
+index.html            estructura y modal de donaciones
+donate.html           página de donaciones (editable)
+css/styles.css        tema oscuro, layout responsive
+js/theory.js          46 acordes y 37 escalas, identificación, grados (sin DOM)
+js/i18n.js            textos en castellano neutro e inglés
+js/audio.js           sintetizador Web Audio: voces, ADSR, reverb, melodías
+js/midi.js            Web MIDI out (manda las mismas notas que suenan)
+js/app.js             estado, piano, guitarra, acorde, escalas, secuencia, desbloqueo
+tests/theory.test.js  pruebas del núcleo musical (node tests/theory.test.js)
+sw.js                 cache offline
+manifest.webmanifest  PWA
+```
+
+El estado central es un conjunto de **notas MIDI**. De ahí salen las pitch classes, el bajo, el cifrado, el piano, la guitarra y la secuencia.
+
+La identificación prueba las 12 raíces contra los 46 acordes y, cuando hay ambigüedad, **prioriza la raíz que coincide con el bajo**: `C-E-G-A` con Do en el bajo es `C6`; con La en el bajo es `Am7`.
+
 ## Límites conocidos
 
 - **Web MIDI** requiere `localhost` o `https`; con `file://` el botón avisa y no funciona.
@@ -228,3 +315,10 @@ Debajo de las escalas hay un secuenciador de **8 filas × 16 columnas**: las cua
 - Algunas escalas exóticas tienen variantes según el libro de referencia.
 - El audio del navegador tiene ~10 ms de latencia: ideal para practicar, no para grabación sample-accurate.
 
+## Próximos pasos posibles
+
+1. Validación de códigos en servidor (licencias reales).
+2. Presets de afinación con nombre ("D♯ estándar", "Drop D", "7 cuerdas B").
+3. Exportar también a MIDI / WAV.
+4. Arpegiador y patrones de ritmo para la secuencia.
+5. Empaquetado como app de escritorio con Tauri.

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chord Assist Pro · Comprar</title>
+  <meta name="description" content="Comprá la licencia de Chord Assist Pro: MIDI, exportación y más.">
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .buy-page { max-width: 760px; margin: 0 auto; padding: 28px 20px 60px; }
+    .buy-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 26px; }
+    .buy-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .5px; }
+    .buy-brand img { width: 30px; height: 30px; }
+    .buy-card { padding: 26px; }
+    .buy-title { margin: 0 0 6px; font-size: 26px; color: var(--text); }
+    .buy-sub { margin: 0 0 18px; color: var(--muted); font-size: 14px; }
+    .buy-price { font-size: 34px; font-weight: 800; color: var(--accent); margin: 10px 0 18px; }
+    .buy-price span { font-size: 13px; font-weight: 500; color: var(--muted-2); }
+    .buy-list { margin: 0 0 22px 18px; padding: 0; color: var(--muted); font-size: 14px; line-height: 1.8; }
+    .buy-note { margin-top: 20px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line);
+      background: rgba(255,255,255,.03); color: var(--muted-2); font-size: 12.5px; line-height: 1.6; }
+    .buy-back { display: inline-block; margin-top: 18px; color: var(--accent-soft); font-size: 13px; text-decoration: none; }
+    .buy-back:hover { text-decoration: underline; }
+    #paypal-container-LNCNLPTHU6PGG { min-height: 48px; }
+  </style>
+</head>
+<body>
+  <div class="buy-page">
+    <div class="buy-top">
+      <div class="buy-brand">
+        <img src="icon.svg" alt="">
+        <span>Chord Assist</span>
+      </div>
+      <a class="buy-back" href="index.html">Volver a la app</a>
+    </div>
+
+    <div class="card buy-card">
+      <h1 class="buy-title">Chord Assist Pro</h1>
+      <p class="buy-sub">Licencia para usar el app completo en este navegador.</p>
+
+      <div class="buy-price">USD 4,50 <span>pago único</span></div>
+
+      <ul class="buy-list">
+        <li>Salida MIDI con canales separados (acorde, escala, bajo, batería).</li>
+        <li>Exportar y abrir secuencias en JSON.</li>
+        <li>Sin límites de tiempo y sin renovaciones.</li>
+      </ul>
+
+      <!-- PayPal (Hosted Button) -->
+      <div id="paypal-container-LNCNLPTHU6PGG"></div>
+
+      <p class="buy-note">
+        Después del pago te llega el <strong>código de activación</strong> por email en pocos minutos.
+        Si no aparece, revisá la carpeta de spam. Con ese código: abrí la app → <em>Desbloquear</em> →
+        pegá el código.
+      </p>
+
+      <a class="buy-back" href="index.html">Ya tengo el código, volver a la app</a>
+    </div>
+  </div>
+
+  <!-- Part 1 -->
+  <script src="https://www.paypal.com/sdk/js?client-id=BAA5mDiHLMNnThroHR4XuWm7wAi3ggQZYJYdhNucr0mN8pGvbFjyZMXTUJsYcsGdYl7waurTFIyjKAGJac&components=hosted-buttons&disable-funding=venmo&currency=USD"></script>
+
+  <!-- Part 2 -->
+  <script>
+    if (window.paypal && paypal.HostedButtons) {
+      paypal.HostedButtons({
+        hostedButtonId: "LNCNLPTHU6PGG"
+      }).render("#paypal-container-LNCNLPTHU6PGG");
+    } else {
+      var box = document.getElementById('paypal-container-LNCNLPTHU6PGG');
+      if (box) {
+        box.innerHTML = '<p style="color:#ff8a8a;font-size:13px">No se pudo cargar PayPal. Revisá la conexión y recargá la página.</p>';
+      }
+    }
+  </script>
+</body>
+</html>

@@ -743,9 +743,13 @@ select optgroup { background: #14161d; color: var(--muted); font-style: normal; 
   color: var(--accent-soft);
 }
 
-.pk-scale { fill: #2fd3c0; pointer-events: none; }
-.pk-scale--dark { fill: #5eead4; }
-.gt-scale { fill: rgba(94, 234, 212, 0.6); pointer-events: none; }
+.pk-scale { fill: #99a2b0; pointer-events: none; }
+.pk-scale.is-blue { fill: #7dd3fc; }
+.pk-scale--dark { fill: #c8d0dc; }
+.gt-scale { fill: rgba(200, 208, 220, 0.35); pointer-events: none; }
+.gt-scale.is-blue { fill: rgba(125, 211, 252, 0.65); }
+.gt-triad { fill: #ff6b6b; stroke: rgba(0, 0, 0, 0.28); stroke-width: 0.8; pointer-events: none; }
+.gt-triad.is-dim { fill: rgba(255, 107, 107, 0.32); stroke: rgba(0, 0, 0, 0.18); }
 
 /* ---------------------------------------------------------------- */
 /* Secuencia                                                         */
@@ -1337,8 +1341,11 @@ input.bpm-num {
   align-items: center;
   gap: 6px;
   margin-top: 10px;
+  margin-bottom: 14px;
   flex-wrap: wrap;
 }
+
+.scale-chips { margin-top: 2px; }
 
 .scale-controls select {
   width: auto;
@@ -1926,4 +1933,364 @@ input.drum-note {
 
 .scale-controls select#scalePattern {
   flex: 0 0 128px;
+}
+
+
+/* Nombre del archivo de la secuencia */
+.seq-file {
+  margin: 10px 0 6px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+
+.seq-file-name {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Arpegios */
+.arp-card { padding: 14px 16px 16px; }
+
+.arp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.arp-head h2 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.arp-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.arp-body { display: flex; flex-direction: column; gap: 8px; }
+
+.arp-row {
+  display: grid;
+  grid-template-columns: 126px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.arp-label {
+  font-size: 9.5px;
+  line-height: 1.35;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted-2);
+  padding-top: 6px;
+}
+
+.arp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.arp-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  padding: 5px 9px;
+  cursor: pointer;
+  transition: 0.15s;
+}
+
+.arp-chip:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.arp-chip.is-active {
+  border-color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.arp-sym { font-size: 13px; font-weight: 700; color: var(--text); }
+.arp-hint { font-size: 9.5px; color: var(--muted-2); }
+
+.arp-empty { margin: 0; font-size: 12px; color: var(--muted-2); }
+
+.arp-triad-row {
+  display: grid;
+  grid-template-columns: 126px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  margin-top: 10px;
+}
+
+.triad-chip { border-color: rgba(255, 107, 107, 0.35); }
+.triad-chip .triad-sym { color: #ff8f8f; }
+.triad-chip.is-active {
+  border-color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.18);
+}
+
+/* Diapasón: notas del arpegio */
+.gt-arp {
+  fill: #ffffff;
+  stroke: rgba(0, 0, 0, 0.35);
+  stroke-width: 0.8;
+}
+
+.gt-arp-root {
+  fill: #ffffff;
+  stroke: var(--accent);
+  stroke-width: 1.4;
+}
+
+
+/* Bloques dentro de la tarjeta de escala/arpegios */
+.block { margin-top: 12px; }
+
+.block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.block-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.block-vol {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  font-size: 10.5px;
+  color: var(--muted-2);
+}
+
+.block-vol input[type="range"] { flex: 1; min-width: 80px; }
+
+.block-vol-hint {
+  font-size: 9.5px;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+/* Arpegiador */
+.seqarp-card { padding: 14px 16px 16px; }
+
+.seqarp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.seqarp-head h2 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.seqarp-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+.seqarp-actions select {
+  width: auto;
+  padding: 5px 7px;
+  font-size: 11.5px;
+  border-radius: 8px;
+}
+
+.seqarp-actions input[type="range"] {
+  flex: 0 0 70px;
+  min-width: 70px;
+}
+
+.seqarp-body {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.seqarp-piano {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.seqarp-key {
+  height: 16px;
+  border-radius: 3px 0 0 3px;
+  background: #e8ecf4;
+  color: #1b2029;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  padding-left: 5px;
+}
+
+.seqarp-key.is-black {
+  width: 62%;
+  background: #2a3140;
+  color: #cfd6e2;
+  border-radius: 3px 0 0 3px;
+  padding-left: 4px;
+  font-size: 8.5px;
+}
+
+.seqarp-grid {
+  display: grid;
+  gap: 2px;
+  grid-auto-rows: 16px;
+}
+
+.seqarp-cell {
+  height: 16px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+  color: #0b0e14;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.seqarp-cell.is-off { opacity: 0.22; cursor: default; }
+
+.seqarp-cell.oct-1 { background: #5c1616; border-color: #7c2020; color: #f6d5d5; }
+.seqarp-cell.oct-2 { background: #8f1f1f; border-color: #b02a2a; color: #ffe3e3; }
+.seqarp-cell.oct-3 { background: #c94a4a; border-color: #e06a6a; color: #1a0d0d; }
+.seqarp-cell.oct-4 { background: #ffb3b3; border-color: #ffd0d0; color: #1a0d0d; }
+
+
+.scale-right {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 700px) {
+  .scale-right { margin-left: 0; }
+}
+
+
+/* Acorde abierto */
+.open-card { padding: 14px 16px 16px; }
+
+.open-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+
+.open-head h2 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.open-tuning {
+  margin: 0 0 8px;
+  font-size: 9.5px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.open-name {
+  text-align: center;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.open-body { display: flex; justify-content: center; }
+
+#openChord { width: 155px; height: auto; }
+
+.oc-fret { stroke: rgba(255, 255, 255, 0.16); stroke-width: 1; }
+.oc-nut { stroke: rgba(255, 255, 255, 0.55); stroke-width: 3; }
+.oc-string { stroke: rgba(255, 255, 255, 0.22); stroke-width: 1; }
+.oc-dot { fill: var(--accent); }
+.oc-num { fill: #1a1206; font-size: 9px; font-weight: 700; }
+.oc-mark { fill: var(--muted-2); font-size: 13px; font-weight: 700; }
+.oc-mark.is-open { fill: var(--muted); }
+.oc-mark.is-mute { fill: #ff8a8a; }
+.oc-empty { fill: var(--muted-2); font-size: 10px; }
+
+/* Sonda de escalas y acorde tenue */
+.pk-white.is-probe { fill: rgba(125, 211, 252, 0.55); }
+
+.gt-dot.is-soft .gt-dot-bg { fill: rgba(255, 196, 110, 0.22); stroke: rgba(255, 196, 110, 0.55); }
+.gt-dot.is-soft .gt-degree { fill: rgba(255, 220, 170, 0.85); }
+
+.gt-dot.is-probe .gt-dot-bg { fill: rgba(125, 211, 252, 0.55); stroke: rgba(125, 211, 252, 0.9); }
+.gt-dot.is-probe .gt-degree { fill: #06232e; }
+
+
+/* Títulos de las tarjetas, un poco más grandes y visibles */
+.workspace > .card h2,
+.inst-head h2,
+.scale-title {
+  font-size: 12.5px;
+  color: #e3e9f4;
+  letter-spacing: 1.2px;
+}
+
+
+.triad-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.triad-actions { margin-top: 2px; }
+
+
+.buy-btn {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  margin-top: 10px;
 }

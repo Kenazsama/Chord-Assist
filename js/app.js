@@ -24,7 +24,13 @@
   const TUNING_KEY = 'chord-assist.tuning';
   const LANG_KEY = 'chord-assist.lang';
   const PRO_KEY = 'chord-assist.pro';
-  const PRO_CODE = 'ChordA';
+  /* Sin llave maestra pública: las licencias de soporte se emiten en el VPS
+     con: sudo -u paypal npm run issue -- --email ... */
+  const PRO_CODE = '';
+  /* URL del bot de licencias (VPS). Dejar vacío para validar sólo con la llave maestra. */
+  const LICENSE_API = 'https://mqtt.domoticargentina.com/paypal';
+  /* Link de pago de PayPal (Payment Link o botón). Vacío = oculta el botón de compra. */
+  const PAYPAL_LINK = 'buy.html';
   /* Cada 5 minutos se recuerda la donación con un modal dentro de la app.
      Si prefieres una ventana aparte, cambia openModal() por:
        window.open('donate.html', 'chordAssistDonate', 'width=560,height=760')
@@ -149,8 +155,24 @@
     editingIndex: null,
     drumClock: null,
     chordVolume: 1,
+    seqName: 'Untitled',
+    arp: null,
+    arpSpeed: 1,
+    arpPlaying: false,
+    arpLoop: false,
+    arpAuto: false,
+    arpOctave: 0,
+    seqArp: { cols: 16, speed: 1, volume: 0.8, auto: false, cells: {} },
+    seqArpPlaying: false,
     scalePattern: 'upDown',
     scaleSeed: 20260101,
+    scaleProbe: new Set(),
+    triad: null,
+    triadPlaying: false,
+    triadLoop: false,
+    triadAuto: false,
+    triadOctave: 0,
+    triadSpeed: 1,
     sections: [],
     suggAuto: true,
     suggRoot: 0,
@@ -176,6 +198,13 @@
   /* ---------------------------------------------------------------- */
   const notesSorted = () => Array.from(state.notes).sort((a, b) => a - b);
   const pcsOf = () => T.sortPcs(notesSorted().map((m) => m % 12));
+  const scaleSearchPcs = () => {
+    const base = pcsOf();
+    if (state.searchMode !== 'scales' || !state.scaleProbe || !state.scaleProbe.size) return base;
+    const set = new Set(base);
+    state.scaleProbe.forEach((m) => set.add(mod12(m)));
+    return T.sortPcs(Array.from(set));
+  };
   const bassMidi = () => (state.notes.size ? notesSorted()[0] : null);
   const bassPc = () => (state.notes.size ? mod12(bassMidi()) : null);
 
@@ -237,8 +266,24 @@
   /* Acciones sobre el acorde                                          */
   /* ---------------------------------------------------------------- */
   function toggleNote(midi) {
+    if (state.searchMode === 'scales') {
+      if (pcsOf().indexOf(mod12(midi)) !== -1) return;
+      if (state.scaleProbe.has(midi)) state.scaleProbe.delete(midi);
+      else {
+        state.scaleProbe.add(midi);
+        A.preview(midi);
+        if (isPro() && MIDI.enabled) MIDI.sendNote(midi, 350, state.scaleChannel);
+      }
+      if (state.scalePlaying) stopScale();
+      render();
+      return;
+    }
+
     if (state.seqPlaying) stopSequence();
     if (state.scalePlaying) stopScale();
+    if (state.arpPlaying) stopArp();
+    if (state.seqArpPlaying) stopSeqArp();
+    if (state.triadPlaying) stopTriad();
     state.scaleManual = false;
 
     if (state.notes.has(midi)) {
@@ -404,6 +449,20 @@
       startBass(A.now() + 0.05, state.chordLoop ? null : beat * 2);
     }
 
+    if (state.arpAuto && state.arp) {
+      startArpAt(A.now() + 0.06);
+    }
+
+    if (state.triadAuto && state.triad) {
+      startTriadAt(A.now() + 0.06);
+    }
+
+    if (state.seqArp.auto) {
+      const cols = state.seqArp.cols;
+      const stepSec = ((60 / A.Settings.bpm) / 4) / (state.seqArp.speed || 1);
+      startSeqArpAt(A.now() + 0.06, cols * stepSec);
+    }
+
     if (!state.drumMuted && hasDrumHits(state.drums)) {
       const beat = 60 / A.Settings.bpm;
       const colDur = (beat / 4) / (state.drums.speed || 1);
@@ -498,6 +557,9 @@
     } else if (layer === 'scale') {
       state.scalePlaying = false;
       updateScaleBtn();
+    } else if (layer === 'arp') {
+      state.arpPlaying = false;
+      updateArpBtn();
     }
   };
 
@@ -524,7 +586,12 @@
       scaleName: sc ? scaleLabel(sc) : null,
       drums: cloneDrums(state.drums),
       section: prev ? (prev.section || null) : null,
-      bass: Object.assign({}, state.bass)
+      bass: Object.assign({}, state.bass),
+      scaleAuto: state.scaleAutoplay,
+      arpAuto: state.arpAuto,
+      arpKey: state.arp ? state.arp.key : null,
+      triadAuto: state.triadAuto,
+      seqarp: cloneSeqArp(state.seqArp)
     };
 
     if (editing) {
@@ -543,12 +610,34 @@
   function editStep(i) {
     const step = state.sequence[i];
     if (!step) return;
-    if (state.seqPlaying) stopSequence();
-    loadStep(i, false);
-    state.editingIndex = i;
+    const info = currentInfo();
+    if (!info || !info.notes.length) {
+      flash(t('msg.buildChord'));
+      return;
+    }
+    const sc = selectedScale();
+    state.sequence[i] = Object.assign({}, step, {
+      notes: info.notes.slice(),
+      symbol: info.symbol || info.pcs.map(localNote).join(' '),
+      name: info.name,
+      root: info.root,
+      typeId: state.explicitType,
+      scaleId: sc ? sc.id : null,
+      scaleRoot: sc ? state.scaleRoot : null,
+      scaleName: sc ? scaleLabel(sc) : null,
+      drums: cloneDrums(state.drums),
+      bass: Object.assign({}, state.bass),
+      scaleAuto: state.scaleAutoplay,
+      arpAuto: state.arpAuto,
+      arpKey: state.arp ? state.arp.key : null,
+      triadAuto: state.triadAuto,
+      seqarp: cloneSeqArp(state.seqArp)
+    });
+    state.activeStep = i;
+    state.editingIndex = null;
     renderSteps();
     updateEditUI();
-    flash(t('msg.editing'));
+    flash(t('msg.savedStep'));
   }
 
   function cancelEdit() {
@@ -611,7 +700,11 @@
       scaleName: step.scaleName,
       drums: cloneDrums(step.drums),
       section: step.section || null,
-      bass: Object.assign({}, step.bass || state.bass)
+      bass: Object.assign({}, step.bass || state.bass),
+      scaleAuto: !!step.scaleAuto,
+      arpAuto: !!step.arpAuto,
+      arpKey: step.arpKey || null,
+      seqarp: cloneSeqArp(step.seqarp)
     });
     renderSteps();
     flash(t('msg.copied', { sym: step.symbol }));
@@ -623,10 +716,108 @@
     renderSteps();
   }
 
+  function genChord(rootPc, typeId) {
+    const chord = T.CHORDS[typeId];
+    if (!chord) return null;
+    const r = T.mod12(rootPc);
+    return {
+      root: r,
+      typeId: typeId,
+      notes: T.voicingOf(chord).map((iv) => PICKER_BASE + r + iv),
+      symbol: T.chordSymbol(r, chord),
+      name: T.esName(r) + ' ' + chord.es
+    };
+  }
+
+  function genDiatonic(rootPc, minor, degree) {
+    const majorTypes = ['maj', 'min', 'min', 'maj', 'maj', 'min', 'dim'];
+    const minorTypes = ['min', 'dim', 'maj', 'min', 'min', 'maj', 'maj'];
+    const majorScale = [0, 2, 4, 5, 7, 9, 11];
+    const minorScale = [0, 2, 3, 5, 7, 8, 10];
+    const scale = minor ? minorScale : majorScale;
+    const types = minor ? minorTypes : majorTypes;
+    return genChord(rootPc + scale[degree], types[degree]);
+  }
+
+  function generateSong(skipConfirm) {
+    if (!skipConfirm && !window.confirm(t('gen.confirm'))) return;
+    stopSequence();
+
+    const minor = Math.random() < 0.45;
+    const root = Math.floor(Math.random() * 12);
+    const majorProgs = [[0, 4, 5, 3], [0, 5, 3, 4], [5, 3, 0, 4], [0, 3, 0, 4], [1, 4, 0, 5]];
+    const minorProgs = [[0, 5, 2, 6], [0, 3, 4, 0], [0, 6, 5, 6], [0, 3, 5, 6]];
+    const progs = minor ? minorProgs : majorProgs;
+    const pick = () => progs[Math.floor(Math.random() * progs.length)];
+
+    const verse = pick();
+    const chorus = pick();
+    const bridge = pick();
+
+    const plan = [
+      { name: 'intro', prog: [verse[0], verse[1]] },
+      { name: 'verse', prog: verse },
+      { name: 'chorus', prog: chorus },
+      { name: 'bridge', prog: bridge },
+      { name: 'interlude', prog: [chorus[0], chorus[1]] },
+      { name: 'verse', prog: verse },
+      { name: 'chorus', prog: chorus },
+      { name: 'outro', prog: [chorus[0], chorus[1]] }
+    ];
+
+    const steps = [];
+    const sections = [];
+
+    const seen = {};
+    plan.forEach((part) => {
+      seen[part.name] = (seen[part.name] || 0) + 1;
+      const secName = seen[part.name] === 1 ? part.name : part.name + '-' + seen[part.name];
+      sections.push(secName);
+      part.prog.forEach((deg) => {
+        const ch = genDiatonic(root, minor, deg);
+        if (!ch) return;
+        steps.push({
+          notes: ch.notes,
+          symbol: ch.symbol,
+          name: ch.name,
+          root: ch.root,
+          typeId: ch.typeId,
+          bars: 1,
+          beats: 4,
+          scaleId: null,
+          scaleRoot: null,
+          scaleName: null,
+          drums: emptyDrums(),
+          section: secName,
+          bass: { enabled: false, waveform: 'triangle', volume: 0.8, figure: 2, length: 1, octave: 0 },
+          scaleAuto: false,
+          arpAuto: false,
+          arpKey: null,
+          seqarp: cloneSeqArp(null)
+        });
+      });
+    });
+
+    state.sequence = steps;
+    state.sections = sections;
+    state.activeStep = -1;
+    state.editingIndex = null;
+    renderSteps();
+    updateEditUI();
+    flash(t('gen.done') + ' · ' + localNote(root) + (minor ? ' menor' : ' mayor'));
+  }
+
+  function updateSeqFile() {
+    const el = $('seqFileName');
+    if (el) el.textContent = state.seqName || t('seq.untitled');
+  }
+
   function clearSequence() {
     stopSequence();
     state.sequence = [];
     state.sections = [];
+    state.seqName = t('seq.untitled');
+    updateSeqFile();
     state.activeStep = -1;
     state.editingIndex = null;
     renderSteps();
@@ -648,7 +839,20 @@
       state.scaleManual = false;
     }
     state.activeStep = i;
+    state.scaleProbe = new Set();
     state.drums = cloneDrums(step.drums);
+    state.scaleAutoplay = !!step.scaleAuto;
+    state.arpAuto = !!step.arpAuto;
+    state.triadAuto = !!step.triadAuto;
+    if (step.seqarp) {
+      state.seqArp = cloneSeqArp(step.seqarp);
+      seqArpSig = '';
+    }
+    state.arpKeyPending = step.arpKey || null;
+    updateScaleControls();
+    updateArpBtn();
+    updateTriadBtn();
+    updateSeqArpBtn();
     if (step.bass) {
       state.bass = Object.assign({
         enabled: false,
@@ -733,6 +937,13 @@
       updateScaleBtn();
     }
 
+    if (state.arpAuto && state.arp) {
+      startArpAt(seqStepStart, stepDur);
+    }
+
+    if (state.seqArp.auto) startSeqArpAt(seqStepStart, stepDur);
+    if (state.triadAuto && state.triad) startTriadAt(seqStepStart, stepDur);
+
     if (state.bass.enabled) startBass(seqStepStart, stepDur);
 
     seqStepStart += stepDur;
@@ -767,7 +978,7 @@
 
   function buildScaleSuggestions() {
     if (state.searchMode === 'scales') {
-      const pcs = pcsOf();
+      const pcs = scaleSearchPcs();
       if (pcs.length < 3) return [];
       return T.scalesForNotes(pcs).slice(0, 16);
     }
@@ -1027,12 +1238,16 @@
   function render() {
     state.info = currentInfo();
     updateScales();
+    maybeRenderArp();
+    maybeRenderSeqArp();
     renderPiano();
     renderGuitar();
     renderChord();
+    renderOpenChord();
     renderScales();
     renderSteps();
     maybeRenderSuggestions();
+    syncSearchButtons();
     syncPickerFromChord();
     updatePlayBtn();
     updateScaleBtn();
@@ -1063,12 +1278,13 @@
       if (WHITE_PCS.indexOf(pc) === -1) continue;
       const x = PADX + wi * ww;
       const on = active.has(m);
+      const probe = state.searchMode === 'scales' && state.scaleProbe.has(m);
       const isRoot = on && rootPc != null && pc === rootPc;
 
       const rect = svgEl('rect', {
         x: round(x), y: 4, width: round(ww - 1), height: keyH,
         rx: 3,
-        class: 'pk-white' + (on ? ' is-on' : ''),
+        class: 'pk-white' + (on ? ' is-on' : '') + (probe ? ' is-probe' : ''),
         'data-midi': m,
         'aria-label': nameOf(pc) + octaveOf(m)
       });
@@ -1076,7 +1292,7 @@
       svg.appendChild(rect);
 
       if (!on && state.scalePcs.has(pc)) {
-        svg.appendChild(svgEl('circle', { cx: round(x + ww / 2), cy: 16, r: 2.8, class: 'pk-scale' }));
+        svg.appendChild(svgEl('circle', { cx: round(x + ww / 2), cy: 16, r: 2.8, class: 'pk-scale' + (state.searchMode === 'scales' ? ' is-blue' : '') }));
       }
 
       if (on) {
@@ -1157,6 +1373,9 @@
     const ghostDegrees = pcsSet.size <= 4;
     const showNames = state.searchMode === 'scales';
     const scaleRootPc = state.scaleId ? state.scaleRoot : null;
+    const arpMode = state.searchMode === 'arpeggios';
+    const arpSet = new Set(arpMode ? arpeggioPositions() : []);
+    const triadSet = new Set(arpMode && state.triad ? triadPcs(state.triad.root, state.triad.type) : []);
 
     for (let f = 0; f <= frets; f++) {
       const x = left + f * fw;
@@ -1188,18 +1407,37 @@
       for (let f = 0; f <= frets; f++) {
         const midi = open + f;
         const pc = mod12(midi);
-        const on = state.notes.has(midi);
+        const on = state.notes.has(midi) || (showNames && state.scaleProbe.has(midi));
+        const probeNote = showNames && state.scaleProbe.has(midi);
         const x = f === 0 ? 74 : left + fw * (f - 0.5);
+
+        if (arpMode) {
+          if (triadSet.has(pc)) {
+            svg.appendChild(svgEl('circle', {
+              cx: round(x), cy: y, r: 5.5,
+              class: i < 3 ? 'gt-triad' : 'gt-triad is-dim'
+            }));
+          } else if (arpSet.has(midi)) {
+            const isArpRoot = state.arp && pc === state.arp.root;
+            svg.appendChild(svgEl('circle', {
+              cx: round(x),
+              cy: y,
+              r: 5.5,
+              class: isArpRoot ? 'gt-arp-root' : 'gt-arp'
+            }));
+          }
+          continue;
+        }
 
         if (!on && !(hasChord && pcsSet.has(pc))) {
           if (state.scalePcs.has(pc)) {
-            svg.appendChild(svgEl('circle', { cx: round(x), cy: y, r: 4, class: 'gt-scale' }));
+            svg.appendChild(svgEl('circle', { cx: round(x), cy: y, r: 4, class: 'gt-scale' + (showNames ? ' is-blue' : '') }));
           } else {
             svg.appendChild(svgEl('circle', { cx: round(x), cy: y, r: 2.4, class: 'gt-spot' }));
           }
         } else if (!on) {
           if (ghostDegrees) {
-            const g = svgEl('g', { class: 'gt-dot is-ghost' });
+            const g = svgEl('g', { class: 'gt-dot is-ghost' + (showNames ? ' is-soft' : '') });
             g.appendChild(svgEl('circle', { cx: round(x), cy: y, r: 8.5, class: 'gt-dot-bg' }));
             const deg = svgEl('text', { x: round(x), y: round(y + 3), class: 'gt-degree', 'text-anchor': 'middle' });
             deg.textContent = showNames ? nameOf(pc) : T.degreeOf(chordObj, mod12(pc - root));
@@ -1215,7 +1453,8 @@
           const isRoot = hasChord && pc === root;
           const isBass = bass != null && pc === bass && pc !== root;
           let cls = 'gt-dot';
-          if (isBass) cls += ' is-bass';
+          if (probeNote) cls += ' is-probe';
+          else if (isBass) cls += ' is-bass';
           else if (isRoot) cls += ' is-root';
 
           const g = svgEl('g', { class: cls });
@@ -1237,6 +1476,9 @@
         svg.appendChild(hit);
       }
     });
+
+    const clearProbe = $('scaleClearProbe');
+    if (clearProbe) clearProbe.hidden = !showNames;
 
     updateGuitarInfo();
   }
@@ -1641,6 +1883,13 @@
     });
   }
 
+  A.onStepsTick = function (notes, when, dur) {
+    if (!isPro() || !MIDI.enabled) return;
+    const delay = Math.max(0, (when - A.now()) * 1000);
+    const durMs = Math.max(60, dur * 900);
+    setTimeout(() => MIDI.sendNotes(notes, durMs, state.scaleChannel), delay);
+  };
+
   A.onDrumHit = function (row, when) {
     if (!isPro() || !MIDI.enabled) return;
     const note = state.drums.notes[row];
@@ -1979,11 +2228,13 @@
     picker: 'card.picker',
     piano: 'card.piano',
     guitar: 'card.guitar',
+    open: 'card.open',
     chord: 'card.chord',
     struct: 'card.struct',
     scale: 'card.scale',
     bass: 'card.bass',
     drum: 'card.drum',
+    seqarp: 'card.seqarp',
     sugg: 'card.sugg'
   };
 
@@ -2092,12 +2343,13 @@
   /* ---------------------------------------------------------------- */
   /* Estructura de la canción                                         */
   /* ---------------------------------------------------------------- */
-  const SECTION_NAMES = ['intro', 'verse', 'chorus', 'bridge', 'solo', 'outro', 'section'];
+  const SECTION_NAMES = ['intro', 'verse', 'chorus', 'bridge', 'interlude', 'solo', 'outro', 'section'];
   const SECTION_COLORS = {
     intro: '#6aa9ff',
     verse: '#5eead4',
     chorus: '#ffb454',
     bridge: '#b98cff',
+    interlude: '#7dd3fc',
     solo: '#ff7ab6',
     outro: '#9aa4b2',
     section: '#8a94a6'
@@ -2351,6 +2603,8 @@
       state.sequence.push(Object.assign({}, st, {
         notes: (st.notes || []).slice(),
         drums: cloneDrums(st.drums),
+        seqarp: cloneSeqArp(st.seqarp),
+        arpKey: st.arpKey || null,
         section: copyName
       }));
     });
@@ -2412,7 +2666,11 @@
       scaleName: sc ? scaleLabel(sc) : null,
       drums: cloneDrums(state.drums),
       section: name,
-      bass: Object.assign({}, state.bass)
+      bass: Object.assign({}, state.bass),
+      scaleAuto: state.scaleAutoplay,
+      arpAuto: state.arpAuto,
+      arpKey: state.arp ? state.arp.key : null,
+      seqarp: cloneSeqArp(state.seqArp)
     };
     state.sequence.push(nuevo);
     if (state.sections.indexOf(name) === -1) state.sections.push(name);
@@ -2463,6 +2721,680 @@
     flash(t('struct.addedSection', { name: sectionName(name) }));
   }
 
+  /* ---------------------------------------------------------------- */
+  /* Arpegios                                                          */
+  /* ---------------------------------------------------------------- */
+  function arpSymbol(pcs, rootPc) {
+    const cands = T.identify(pcs);
+    const pick = cands.filter((c) => c.root === T.mod12(rootPc))[0] || cands[0];
+    if (!pick) return pcs.map((p) => nameOf(p)).join(' ');
+    return T.chordSymbol(pick.root, pick.chord);
+  }
+
+  function makeArp(label, root, pcs) {
+    const set = Array.from(new Set(pcs.map((p) => T.mod12(p)))).sort((a, b) => a - b);
+    return {
+      key: T.mod12(root) + '|' + set.join(','),
+      label: label,
+      root: T.mod12(root),
+      pcs: set,
+      symbol: arpSymbol(set, root)
+    };
+  }
+
+  function arpProposals() {
+    const info = state.info;
+    const out = [];
+    if (!info || !info.chord || !info.pcs.length) return out;
+    const root = info.root;
+    const ivs = info.chord.intervals;
+
+    out.push(Object.assign(
+      makeArp(t('arp.chordTriad'), root, ivs.slice(0, 3).map((iv) => root + iv)),
+      { group: 'chord' }
+    ));
+    if (ivs.length > 3) {
+      out.push(Object.assign(
+        makeArp(t('arp.chordSeventh'), root, ivs.map((iv) => root + iv)),
+        { group: 'chord' }
+      ));
+    }
+
+    const scales = T.scalesForNotes(info.pcs)
+      .filter((x) => x.scale.intervals.length >= 7 && T.mod12(x.root) !== T.mod12(root))
+      .map((x) => {
+        const n = x.scale.intervals.length;
+        const r = T.mod12(x.root);
+        const triad = [0, 2, 4].map((k) => r + x.scale.intervals[k % n]);
+        const overlap = triad
+          .map((pc) => T.mod12(pc))
+          .filter((pc) => info.pcs.indexOf(pc) !== -1).length;
+        return { item: x, root: r, triad: triad, overlap: overlap };
+      })
+      .sort((a, b) => b.overlap - a.overlap ||
+        a.item.extra - b.item.extra ||
+        b.item.scale.rank - a.item.scale.rank)
+      .slice(0, 2);
+
+    scales.forEach((entry) => {
+      out.push(Object.assign(makeArp(
+        t('arp.fromScale', { name: localNote(entry.root) + ' ' + scaleLabel(entry.item.scale) }),
+        entry.root,
+        entry.triad
+      ), { group: 'scale' }));
+    });
+
+    return out;
+  }
+
+  let arpSig = '';
+
+  function maybeRenderArp() {
+    const sig = [
+      pcsOf().join('.'),
+      state.info ? state.info.root : '',
+      state.arp ? state.arp.key : '',
+      state.arpKeyPending || '',
+      lang()
+    ].join('~');
+    if (sig === arpSig) return;
+    arpSig = sig;
+    renderArp();
+  }
+
+  function renderArp() {
+    const body = $('arpBody');
+    if (!body) return;
+    const props = arpProposals();
+
+    if (state.arpKeyPending) {
+      const found = props.filter((x) => x.key === state.arpKeyPending)[0];
+      if (found) state.arp = found;
+      state.arpKeyPending = null;
+    }
+    if (state.arp && !props.some((x) => x.key === state.arp.key)) state.arp = null;
+    if (!state.arp && props.length) state.arp = props[0];
+
+    body.textContent = '';
+
+    if (!props.length) {
+      const p = document.createElement('p');
+      p.className = 'arp-empty';
+      p.textContent = t('arp.empty');
+      body.appendChild(p);
+      updateArpBtn();
+      return;
+    }
+
+    const rows = [
+      { label: t('arp.row.chord'), items: props.filter((x) => x.group === 'chord') },
+      { label: t('arp.row.scale'), items: props.filter((x) => x.group === 'scale') }
+    ];
+
+    rows.forEach((row) => {
+      if (!row.items.length) return;
+      const line = document.createElement('div');
+      line.className = 'arp-row';
+
+      const lab = document.createElement('span');
+      lab.className = 'arp-label';
+      lab.textContent = row.label;
+      line.appendChild(lab);
+
+      const chips = document.createElement('span');
+      chips.className = 'arp-chips';
+      row.items.forEach((item) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'arp-chip' + (state.arp && state.arp.key === item.key ? ' is-active' : '');
+        const sym = document.createElement('span');
+        sym.className = 'arp-sym';
+        sym.textContent = item.symbol;
+        const hint = document.createElement('span');
+        hint.className = 'arp-hint';
+        hint.textContent = item.label;
+        b.appendChild(sym);
+        b.appendChild(hint);
+        b.addEventListener('click', () => {
+          if (state.arp && state.arp.key === item.key) {
+            state.arp = null;
+          } else {
+            state.arp = item;
+            state.searchMode = 'arpeggios';
+            syncSearchButtons();
+          }
+          renderGuitar();
+          renderArp();
+        });
+        chips.appendChild(b);
+      });
+      line.appendChild(chips);
+      body.appendChild(line);
+    });
+
+    renderTriads();
+    updateArpBtn();
+  }
+
+  const TRIADS = [
+    { id: 'maj', i18n: 'triad.maj' },
+    { id: 'min', i18n: 'triad.min' },
+    { id: 'aug', i18n: 'triad.aug' },
+    { id: 'dim', i18n: 'triad.dim' }
+  ];
+
+  function triadPcs(root, type) {
+    const ivs = type === 'maj' ? [0, 4, 7]
+      : type === 'min' ? [0, 3, 7]
+        : type === 'aug' ? [0, 4, 8] : [0, 3, 6];
+    return ivs.map((iv) => T.mod12(root + iv));
+  }
+
+  function renderTriads() {
+    const wrap = $('arpTriads');
+    if (!wrap) return;
+    wrap.textContent = '';
+    const info = state.info;
+    if (!info || !info.chord) return;
+
+    TRIADS.forEach((tri) => {
+      const active = state.triad && state.triad.type === tri.id && state.triad.root === T.mod12(info.root);
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'arp-chip triad-chip' + (active ? ' is-active' : '');
+
+      const sym = document.createElement('span');
+      sym.className = 'arp-sym triad-sym';
+      sym.textContent = T.chordSymbol(T.mod12(info.root), T.CHORDS[tri.id]);
+
+      const hint = document.createElement('span');
+      hint.className = 'arp-hint';
+      hint.textContent = t(tri.i18n);
+
+      b.appendChild(sym);
+      b.appendChild(hint);
+      b.addEventListener('click', () => {
+        if (active) {
+          state.triad = null;
+        } else {
+          state.triad = { root: T.mod12(info.root), type: tri.id };
+          state.searchMode = 'arpeggios';
+          syncSearchButtons();
+        }
+        renderGuitar();
+        renderArp();
+        updateTriadBtn();
+      });
+      wrap.appendChild(b);
+    });
+  }
+
+  function triadSequence() {
+    if (!state.triad) return null;
+    const rootMidi = 48 + state.triad.root + (state.triadOctave || 0) * 12;
+    const ivs = triadPcs(state.triad.root, state.triad.type)
+      .map((pc) => T.mod12(pc - state.triad.root)).sort((a, b) => a - b);
+    const up = [];
+    for (let o = 0; o <= 12; o += 12) ivs.forEach((iv) => up.push(rootMidi + iv + o));
+    up.push(rootMidi + 24);
+    return up.concat(up.slice(0, -1).reverse());
+  }
+
+  function updateTriadBtn() {
+    const pb = $('triadPlay');
+    if (pb) {
+      pb.classList.toggle('is-active', state.triadPlaying);
+      pb.textContent = state.triadPlaying ? '■' : '▶';
+    }
+    const sp = $('triadSpeed');
+    if (sp) sp.textContent = '×' + (state.triadSpeed || 1);
+    const au = $('triadAuto');
+    if (au) {
+      au.classList.toggle('is-active', state.triadAuto);
+      au.setAttribute('aria-pressed', state.triadAuto ? 'true' : 'false');
+    }
+    const lp = $('triadLoop');
+    if (lp) {
+      lp.classList.toggle('is-active', state.triadLoop);
+      lp.setAttribute('aria-pressed', state.triadLoop ? 'true' : 'false');
+    }
+    const dn = $('triadOctDown');
+    const upBtn = $('triadOctUp');
+    if (dn) dn.classList.toggle('is-active', (state.triadOctave || 0) < 0);
+    if (upBtn) upBtn.classList.toggle('is-active', (state.triadOctave || 0) > 0);
+  }
+
+  function stopTriad() {
+    A.stopLayer('triad');
+    state.triadPlaying = false;
+    updateTriadBtn();
+  }
+
+  function startTriadAt(startTime, totalDur) {
+    const seq = triadSequence();
+    if (!seq) return false;
+    const stepMs = (60000 / A.Settings.bpm) / 2 / (state.triadSpeed || 1);
+    const wave = $('scaleWave') ? $('scaleWave').value : 'sine';
+    const gain = $('scaleVol') ? parseFloat($('scaleVol').value) : 0.65;
+
+    A.setLayerOptions('triad', { waveform: wave, gain: gain });
+    A.ensure();
+    A.melody(seq, {
+      stepMs: stepMs,
+      repeat: totalDur ? true : state.triadLoop,
+      startTime: startTime,
+      totalDur: totalDur || null,
+      layer: 'triad'
+    });
+    state.triadPlaying = true;
+    updateTriadBtn();
+
+    if (isPro() && MIDI.enabled) {
+      let midiSeq = seq;
+      if (totalDur) {
+        const reps = Math.max(1, Math.ceil(totalDur / ((seq.length * stepMs) / 1000)));
+        if (reps > 1) {
+          midiSeq = [];
+          for (let r = 0; r < reps; r++) midiSeq = midiSeq.concat(seq);
+        }
+      }
+      MIDI.sendSequence(midiSeq, stepMs, stepMs * 0.9, state.scaleChannel);
+    }
+    return true;
+  }
+
+  function playTriad() {
+    if (state.triadPlaying) { stopTriad(); return; }
+    if (!state.triad) { flash(t('triad.pick')); return; }
+    startTriadAt(A.now() + 0.05);
+  }
+
+  function arpeggioPositions() {
+    const pcs = new Set(state.arp ? state.arp.pcs : []);
+    if (!pcs.size) return [];
+    const out = [];
+    state.guitarTuning.forEach((open) => {
+      for (let f = 0; f <= 12; f++) {
+        if (pcs.has(T.mod12(open + f))) out.push(open + f);
+      }
+    });
+    return out;
+  }
+
+  function updateArpBtn() {
+    const pb = $('arpPlay');
+    if (pb) {
+      pb.classList.toggle('is-active', state.arpPlaying);
+      pb.textContent = state.arpPlaying ? '■' : '▶';
+    }
+    const sp = $('arpSpeed');
+    if (sp) sp.textContent = '×' + (state.arpSpeed || 1);
+    const lp = $('arpLoop');
+    if (lp) {
+      lp.classList.toggle('is-active', state.arpLoop);
+      lp.setAttribute('aria-pressed', state.arpLoop ? 'true' : 'false');
+    }
+    const au = $('arpAuto');
+    if (au) {
+      au.classList.toggle('is-active', state.arpAuto);
+      au.setAttribute('aria-pressed', state.arpAuto ? 'true' : 'false');
+    }
+    const dn = $('arpOctDown');
+    const up = $('arpOctUp');
+    if (dn) dn.classList.toggle('is-active', (state.arpOctave || 0) < 0);
+    if (up) up.classList.toggle('is-active', (state.arpOctave || 0) > 0);
+  }
+
+  function stopArp() {
+    A.stopLayer('arp');
+    state.arpPlaying = false;
+    updateArpBtn();
+    if (isPro() && MIDI.enabled && !state.scalePlaying) MIDI.stopChannel(state.scaleChannel);
+  }
+
+  function arpSequence() {
+    if (!state.arp) return null;
+    const rootMidi = 48 + state.arp.root + (state.arpOctave || 0) * 12;
+    const ivs = state.arp.pcs.map((pc) => T.mod12(pc - state.arp.root)).sort((a, b) => a - b);
+    const up = [];
+    for (let o = 0; o <= 12; o += 12) {
+      ivs.forEach((iv) => up.push(rootMidi + iv + o));
+    }
+    up.push(rootMidi + 24);
+    return up.concat(up.slice(0, -1).reverse());
+  }
+
+  function startArpAt(startTime, totalDur) {
+    const seq = arpSequence();
+    if (!seq) return false;
+    const stepMs = (60000 / A.Settings.bpm) / 2 / (state.arpSpeed || 1);
+    const wave = $('scaleWave') ? $('scaleWave').value : 'sine';
+    const gain = $('scaleVol') ? parseFloat($('scaleVol').value) : 0.65;
+
+    A.setLayerOptions('arp', { waveform: wave, gain: gain });
+    A.ensure();
+    A.melody(seq, {
+      stepMs: stepMs,
+      repeat: totalDur ? true : state.arpLoop,
+      startTime: startTime,
+      totalDur: totalDur || null,
+      layer: 'arp'
+    });
+    state.arpPlaying = true;
+    updateArpBtn();
+
+    if (isPro() && MIDI.enabled) {
+      let midiSeq = seq;
+      if (totalDur) {
+        const reps = Math.max(1, Math.ceil(totalDur / ((seq.length * stepMs) / 1000)));
+        if (reps > 1) {
+          midiSeq = [];
+          for (let r = 0; r < reps; r++) midiSeq = midiSeq.concat(seq);
+        }
+      }
+      MIDI.sendSequence(midiSeq, stepMs, stepMs * 0.9, state.scaleChannel);
+    }
+    return true;
+  }
+
+  function playArp() {
+    if (state.arpPlaying) { stopArp(); return; }
+    if (!state.arp) return;
+    startArpAt(A.now() + 0.05);
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Arpegiador (piano roll)                                           */
+  /* ---------------------------------------------------------------- */
+  const SEQARP_BASE = 36;
+
+  function seqArpKey(sem, col) { return sem + ':' + col; }
+
+  function cloneSeqArp(d) {
+    const src = d || {};
+    return {
+      cols: src.cols === 32 ? 32 : 16,
+      speed: [1, 2, 4].indexOf(src.speed) !== -1 ? src.speed : 1,
+      volume: typeof src.volume === 'number' ? src.volume : 0.8,
+      auto: !!src.auto,
+      cells: Object.assign({}, src.cells || {})
+    };
+  }
+
+  function renderSeqArp() {
+    const piano = $('seqarpPiano');
+    const grid = $('seqarpGrid');
+    if (!piano || !grid) return;
+
+    const cols = state.seqArp.cols;
+    const pcs = state.scalePcs || new Set();
+    const blackPcs = [1, 3, 6, 8, 10];
+
+    Object.keys(state.seqArp.cells).forEach((k) => {
+      const sem = parseInt(k.split(':')[0], 10);
+      if (!pcs.has(T.mod12(SEQARP_BASE + sem))) delete state.seqArp.cells[k];
+    });
+
+    piano.textContent = '';
+    grid.textContent = '';
+    grid.style.gridTemplateColumns = 'repeat(' + cols + ', minmax(0, 1fr))';
+
+    for (let d = 0; d < 12; d++) {
+      const sem = 11 - d;
+      const pc = T.mod12(SEQARP_BASE + sem);
+      const off = !pcs.has(pc);
+
+      const key = document.createElement('div');
+      key.className = 'seqarp-key' + (blackPcs.indexOf(pc) !== -1 ? ' is-black' : '');
+      key.textContent = T.enName(pc);
+      piano.appendChild(key);
+
+      for (let c = 0; c < cols; c++) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        const oct = state.seqArp.cells[seqArpKey(sem, c)] || 0;
+        b.className = 'seqarp-cell' + (off ? ' is-off' : '') + (oct ? ' oct-' + oct : '');
+        b.dataset.sem = String(sem);
+        b.dataset.col = String(c);
+        b.textContent = oct ? String(oct) : '';
+        b.addEventListener('click', () => cycleSeqArpCell(sem, c, b));
+        grid.appendChild(b);
+      }
+    }
+    updateSeqArpBtn();
+  }
+
+  function cycleSeqArpCell(sem, col, btn) {
+    const pc = T.mod12(SEQARP_BASE + sem);
+    if (!(state.scalePcs && state.scalePcs.has(pc))) return;
+    const k = seqArpKey(sem, col);
+    const cur = state.seqArp.cells[k] || 0;
+    const next = cur === 0 ? 1 : (cur >= 4 ? 0 : cur + 1);
+    if (next) state.seqArp.cells[k] = next;
+    else delete state.seqArp.cells[k];
+    btn.className = 'seqarp-cell' + (next ? ' oct-' + next : '');
+    btn.textContent = next ? String(next) : '';
+  }
+
+  let seqArpSig = '';
+
+  function maybeRenderSeqArp() {
+    const sig = [
+      state.seqArp.cols,
+      state.seqArp.speed,
+      Array.from(state.scalePcs || []).sort((a, b) => a - b).join('.'),
+      Object.keys(state.seqArp.cells).sort().map((k) => k + '=' + state.seqArp.cells[k]).join(',')
+    ].join('~');
+    if (sig === seqArpSig) return;
+    seqArpSig = sig;
+    renderSeqArp();
+  }
+
+  function seqArpSteps() {
+    const cols = state.seqArp.cols;
+    const out = [];
+    for (let c = 0; c < cols; c++) {
+      const notes = [];
+      for (let sem = 0; sem < 12; sem++) {
+        const oct = state.seqArp.cells[seqArpKey(sem, c)] || 0;
+        if (oct) notes.push(SEQARP_BASE + sem + (oct - 1) * 12);
+      }
+      out.push(notes);
+    }
+    return out;
+  }
+
+  function updateSeqArpBtn() {
+    const pb = $('seqarpPlay');
+    if (pb) {
+      pb.classList.toggle('is-active', state.seqArpPlaying);
+      pb.textContent = state.seqArpPlaying ? '■' : '▶';
+    }
+    const sp = $('seqarpSpeed');
+    if (sp) sp.textContent = '×' + (state.seqArp.speed || 1);
+    const au = $('seqarpAuto');
+    if (au) {
+      au.classList.toggle('is-active', !!state.seqArp.auto);
+      au.setAttribute('aria-pressed', state.seqArp.auto ? 'true' : 'false');
+    }
+    const vol = $('seqarpVol');
+    if (vol && parseFloat(vol.value) !== state.seqArp.volume) {
+      vol.value = String(state.seqArp.volume);
+    }
+    const cols = $('seqarpCols');
+    if (cols && parseInt(cols.value, 10) !== state.seqArp.cols) {
+      cols.value = String(state.seqArp.cols);
+    }
+  }
+
+  function stopSeqArp() {
+    A.stopSteps();
+    state.seqArpPlaying = false;
+    updateSeqArpBtn();
+  }
+
+  function startSeqArpAt(startTime, totalDur) {
+    const steps = seqArpSteps();
+    if (!steps.some((x) => x.length)) return false;
+    const stepMs = ((60000 / A.Settings.bpm) / 4) / (state.seqArp.speed || 1);
+    const wave = $('scaleWave') ? $('scaleWave').value : 'sine';
+    A.setLayerOptions('seqarp', { waveform: wave, gain: state.seqArp.volume });
+    A.ensure();
+    A.playSteps(steps, {
+      stepMs: stepMs,
+      layer: 'seqarp',
+      startTime: startTime,
+      totalDur: totalDur || null
+    });
+    state.seqArpPlaying = true;
+    updateSeqArpBtn();
+    return true;
+  }
+
+  function playSeqArp() {
+    if (state.seqArpPlaying) { stopSeqArp(); return; }
+    if (!startSeqArpAt(A.now() + 0.05)) flash(t('seqarp.empty'));
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Acorde abierto (primeros 4 trastes)                               */
+  /* ---------------------------------------------------------------- */
+  const OPEN_SHAPES = {
+    C: [-1, 3, 2, 0, 1, 0],
+    C7: [-1, 3, 2, 3, 1, 0],
+    Cmaj7: [-1, 3, 2, 0, 0, 0],
+    Cadd9: [-1, 3, 2, 0, 3, 0],
+    D: [-1, -1, 0, 2, 3, 2],
+    Dm: [-1, -1, 0, 2, 3, 1],
+    D7: [-1, -1, 0, 2, 1, 2],
+    Dm7: [-1, -1, 0, 2, 1, 1],
+    E: [0, 2, 2, 1, 0, 0],
+    Em: [0, 2, 2, 0, 0, 0],
+    E7: [0, 2, 0, 1, 0, 0],
+    Em7: [0, 2, 0, 0, 0, 0],
+    G: [3, 2, 0, 0, 0, 3],
+    G7: [3, 2, 0, 0, 0, 1],
+    A: [-1, 0, 2, 2, 2, 0],
+    Am: [-1, 0, 2, 2, 1, 0],
+    A7: [-1, 0, 2, 0, 2, 0],
+    Am7: [-1, 0, 2, 0, 1, 0],
+    B7: [-1, 2, 1, 2, 0, 2],
+    Fmaj7: [-1, -1, 3, 2, 1, 0]
+  };
+
+  function openChordShape(pcs, root, symbol) {
+    if (symbol && OPEN_SHAPES[symbol]) return OPEN_SHAPES[symbol].slice();
+
+    const tuning = [40, 45, 50, 55, 59, 64];
+    const cand = tuning.map((open) => {
+      const list = [{ f: -1, midi: null }];
+      for (let f = 0; f <= 4; f++) {
+        if (pcs.has(T.mod12(open + f))) list.push({ f: f, midi: open + f });
+      }
+      return list;
+    });
+
+    let best = null;
+    const pick = [];
+
+    const rec = (i) => {
+      if (i === tuning.length) {
+        const sounding = pick.filter((x) => x.f >= 0);
+        if (sounding.length < 4) return;
+        if (!pick.some((x) => x.f === 0)) return;
+
+        const bassPc = T.mod12(sounding[0].midi);
+        const frets = sounding.filter((x) => x.f > 0).map((x) => x.f);
+        const maxF = frets.length ? Math.max.apply(null, frets) : 0;
+        const minF = frets.length ? Math.min.apply(null, frets) : 0;
+        if (maxF - minF > 3) return;
+
+        let score = sounding.length * 10;
+        score += bassPc === T.mod12(root) ? 10 : (pcs.has(bassPc) ? 2 : -8);
+        score += pick.filter((x) => x.f === 0).length * 2;
+        score -= maxF * 1.5;
+        score -= pick.filter((x) => x.f === -1).length * 1.5;
+        if (!best || score > best.score) best = { score: score, shape: pick.slice() };
+        return;
+      }
+      cand[i].forEach((c) => {
+        pick.push(c);
+        rec(i + 1);
+        pick.pop();
+      });
+    };
+
+    rec(0);
+    if (!best) return null;
+    return best.shape.map((x) => x.f);
+  }
+
+  function renderOpenChord() {
+    const svg = $('openChord');
+    if (!svg) return;
+    svg.textContent = '';
+    const nameEl = $('openName');
+
+    const info = currentInfo();
+    if (nameEl) {
+      nameEl.textContent = !info ? '' : (lang() === 'en' ? info.symbol : info.name);
+    }
+
+    if (!info) {
+      const msg = svgEl('text', { x: 80, y: 100, class: 'oc-empty', 'text-anchor': 'middle' });
+      msg.textContent = t('open.empty');
+      svg.appendChild(msg);
+      return;
+    }
+
+    const shape = openChordShape(new Set(info.pcs), info.root, info.symbol);
+    if (!shape) {
+      const msg = svgEl('text', { x: 80, y: 100, class: 'oc-empty', 'text-anchor': 'middle' });
+      msg.textContent = t('open.none');
+      svg.appendChild(msg);
+      return;
+    }
+
+    const left = 24;
+    const gap = 22;
+    const top = 44;
+    const fh = 30;
+
+    for (let f = 0; f <= 4; f++) {
+      const y = top + f * fh;
+      svg.appendChild(svgEl('line', {
+        x1: left - 8, y1: y, x2: left + gap * 5 + 8, y2: y,
+        class: f === 0 ? 'oc-nut' : 'oc-fret'
+      }));
+    }
+
+    for (let i = 0; i < 6; i++) {
+      const x = left + i * gap;
+      svg.appendChild(svgEl('line', {
+        x1: x, y1: top, x2: x, y2: top + 4 * fh, class: 'oc-string'
+      }));
+
+      const f = shape[i];
+      const tx = svgEl('text', { x: x, y: 30, class: 'oc-mark', 'text-anchor': 'middle' });
+      if (f === -1) {
+        tx.textContent = '×';
+        tx.setAttribute('class', 'oc-mark is-mute');
+      } else if (f === 0) {
+        tx.textContent = '○';
+        tx.setAttribute('class', 'oc-mark is-open');
+      }
+      if (f === -1 || f === 0) svg.appendChild(tx);
+
+      if (f > 0) {
+        const cy = top + (f - 0.5) * fh;
+        svg.appendChild(svgEl('circle', { cx: x, cy: round(cy), r: 8.5, class: 'oc-dot' }));
+        const num = svgEl('text', { x: x, y: round(cy + 3.5), class: 'oc-num', 'text-anchor': 'middle' });
+        num.textContent = String(f);
+        svg.appendChild(num);
+      }
+    }
+  }
+
   function updatePlayBtn() {
     const icon = $('playIcon');
     const label = $('playLabel');
@@ -2496,11 +3428,17 @@
   /* Desbloqueo / donaciones                                          */
   /* ---------------------------------------------------------------- */
   function isPro() {
-    try { return localStorage.getItem(PRO_KEY) === '1'; } catch (e) { return false; }
+    try {
+      const v = localStorage.getItem(PRO_KEY);
+      return !!v && v !== '0';
+    } catch (e) { return false; }
   }
 
-  function setPro() {
-    try { localStorage.setItem(PRO_KEY, '1'); } catch (e) { /* noop */ }
+  function setPro(code) {
+    try {
+      const v = code ? 'code:' + String(code).trim() : '1';
+      localStorage.setItem(PRO_KEY, v);
+    } catch (e) { /* noop */ }
     updateLockUI();
   }
 
@@ -2529,22 +3467,81 @@
     if (modal) modal.hidden = true;
   }
 
-  function tryUnlock(code) {
+  function unlockMsg(text, ok) {
     const msg = $('unlockMsg');
-    if (String(code).trim().toLowerCase() === PRO_CODE.toLowerCase()) {
+    if (!msg) return;
+    msg.textContent = text;
+    msg.className = 'unlock-msg ' + (ok ? 'is-ok' : 'is-bad');
+  }
+
+  async function tryUnlock(code) {
+    const clean = String(code || '').trim();
+    if (!clean) return false;
+
+    /* Llave maestra histórica (soporte) */
+    if (PRO_CODE && clean.toLowerCase() === PRO_CODE.toLowerCase()) {
       setPro();
-      if (msg) {
-        msg.textContent = t('modal.unlockOk');
-        msg.className = 'unlock-msg is-ok';
-      }
+      unlockMsg(t('modal.unlockOk'), true);
       setTimeout(closeModal, 1200);
       return true;
     }
-    if (msg) {
-      msg.textContent = t('modal.unlockBad');
-      msg.className = 'unlock-msg is-bad';
+
+    /* Validación online contra el bot */
+    if (!LICENSE_API) {
+      unlockMsg(t('modal.unlockBad'), false);
+      return false;
     }
-    return false;
+
+    const btn = document.querySelector('#unlockForm button[type="submit"]');
+    if (btn) btn.disabled = true;
+    unlockMsg(t('modal.unlockChecking'), true);
+
+    try {
+      const res = await fetch(LICENSE_API.replace(/\/$/, '') + '/api/license/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: clean })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data && data.valid) {
+        setPro(clean);
+        unlockMsg(t('modal.unlockOk'), true);
+        setTimeout(closeModal, 1200);
+        return true;
+      }
+      unlockMsg(t('modal.unlockBad'), false);
+      return false;
+    } catch (e) {
+      unlockMsg(t('modal.unlockOffline'), false);
+      return false;
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  /* Si el código guardado fue anulado (reembolso), se vuelve a bloquear.
+     Sin conexión NO se bloquea: sólo si el servidor dice explícitamente que no vale. */
+  async function revalidateLicense() {
+    if (!LICENSE_API) return;
+    let stored = '';
+    try { stored = localStorage.getItem(PRO_KEY) || ''; } catch (e) { return; }
+    if (!stored.startsWith('code:')) return;
+
+    const code = stored.slice(5);
+    try {
+      const res = await fetch(LICENSE_API.replace(/\/$/, '') + '/api/license/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data && data.valid === false) {
+        try { localStorage.removeItem(PRO_KEY); } catch (e) { /* noop */ }
+        updateLockUI();
+      }
+    } catch (e) {
+      /* sin red o servidor caído: se mantiene la licencia */
+    }
   }
 
   function startDonateTimer() {
@@ -2645,7 +3642,12 @@
           notes: s.drums.notes
         } : null,
         section: s.section || null,
-        bass: s.bass || null
+        bass: s.bass || null,
+        scaleAuto: !!s.scaleAuto,
+        arpAuto: !!s.arpAuto,
+        arpKey: typeof s.arpKey === 'string' ? s.arpKey : null,
+        triadAuto: !!s.triadAuto,
+        seqarp: s.seqarp || null
       })),
       sections: state.sections.slice()
     };
@@ -2654,7 +3656,7 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'chord-assist-secuencia.json';
+    a.download = (state.seqName || 'Untitled') + '.json';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -2691,12 +3693,19 @@
             scaleName: sc ? scaleLabel(sc) : null,
             drums: s.drums ? cloneDrums(s.drums) : emptyDrums(),
             section: typeof s.section === 'string' ? s.section : null,
-            bass: s.bass && typeof s.bass === 'object' ? Object.assign({}, s.bass) : null
+            bass: s.bass && typeof s.bass === 'object' ? Object.assign({}, s.bass) : null,
+            scaleAuto: !!s.scaleAuto,
+            arpAuto: !!s.arpAuto,
+            arpKey: typeof s.arpKey === 'string' ? s.arpKey : null,
+            triadAuto: !!s.triadAuto,
+            seqarp: s.seqarp ? cloneSeqArp(s.seqarp) : null
           };
         });
         state.sections = Array.isArray(data.sections)
           ? data.sections.filter((n) => typeof n === 'string' && n)
           : [];
+        state.seqName = (file.name || 'Untitled').replace(/\.json$/i, '');
+        updateSeqFile();
         renderSteps();
         flash(t('msg.imported'));
       } catch (err) {
@@ -2854,6 +3863,7 @@
   function bindControls() {
     $('playBtn').addEventListener('click', togglePlay);
     $('addBtn').addEventListener('click', addCurrent);
+    $('genSong').addEventListener('click', generateSong);
     $('clearBtn').addEventListener('click', clearNotes);
 
     $('flatBtn').addEventListener('click', () => {
@@ -2976,6 +3986,11 @@
 
     $('cancelEdit').addEventListener('click', cancelEdit);
 
+    $('scaleClearProbe').addEventListener('click', () => {
+      state.scaleProbe = new Set();
+      render();
+    });
+
     $('chordVol').addEventListener('input', (e) => {
       state.chordVolume = parseFloat(e.target.value);
       A.setLayerOptions('chord', { gain: state.chordVolume });
@@ -2984,6 +3999,99 @@
     $('scalePattern').addEventListener('change', (e) => {
       state.scalePattern = e.target.value;
       if (state.scalePlaying) { stopScale(); playScale(); }
+    });
+
+    $('arpPlay').addEventListener('click', playArp);
+    $('seqarpPlay').addEventListener('click', playSeqArp);
+    $('seqarpClear').addEventListener('click', () => {
+      state.seqArp.cells = {};
+      seqArpSig = '';
+      maybeRenderSeqArp();
+      if (state.seqArpPlaying) stopSeqArp();
+    });
+    $('seqarpVol').addEventListener('input', (e) => {
+      state.seqArp.volume = parseFloat(e.target.value);
+      A.setLayerOptions('seqarp', { gain: state.seqArp.volume });
+    });
+
+    $('seqarpAuto').addEventListener('click', () => {
+      state.seqArp.auto = !state.seqArp.auto;
+      updateSeqArpBtn();
+    });
+
+    $('seqarpSpeed').addEventListener('click', () => {
+      const idx = [1, 2, 4].indexOf(state.seqArp.speed);
+      state.seqArp.speed = [1, 2, 4][(idx + 1) % 3];
+      updateSeqArpBtn();
+      if (state.seqArpPlaying) { stopSeqArp(); playSeqArp(); }
+    });
+    $('seqarpCols').addEventListener('change', (e) => {
+      state.seqArp.cols = parseInt(e.target.value, 10) || 16;
+      seqArpSig = '';
+      maybeRenderSeqArp();
+      if (state.seqArpPlaying) { stopSeqArp(); playSeqArp(); }
+    });
+    $('selClear').addEventListener('click', () => {
+      state.arp = null;
+      state.triad = null;
+      state.scaleManual = false;
+      render();
+      updateTriadBtn();
+    });
+
+    $('triadPlay').addEventListener('click', playTriad);
+    $('triadSpeed').addEventListener('click', () => {
+      const idx = [1, 2, 4].indexOf(state.triadSpeed);
+      state.triadSpeed = [1, 2, 4][(idx + 1) % 3];
+      updateTriadBtn();
+      if (state.triadPlaying) { stopTriad(); playTriad(); }
+    });
+    $('triadLoop').addEventListener('click', () => {
+      state.triadLoop = !state.triadLoop;
+      updateTriadBtn();
+    });
+    $('triadAuto').addEventListener('click', () => {
+      state.triadAuto = !state.triadAuto;
+      updateTriadBtn();
+    });
+    $('triadOctDown').addEventListener('click', () => {
+      state.triadOctave = Math.max(-1, Math.min(1, (state.triadOctave || 0) - 1));
+      updateTriadBtn();
+      if (state.triadPlaying) { stopTriad(); playTriad(); }
+    });
+    $('triadOctUp').addEventListener('click', () => {
+      state.triadOctave = Math.max(-1, Math.min(1, (state.triadOctave || 0) + 1));
+      updateTriadBtn();
+      if (state.triadPlaying) { stopTriad(); playTriad(); }
+    });
+
+    $('arpLoop').addEventListener('click', () => {
+      state.arpLoop = !state.arpLoop;
+      updateArpBtn();
+    });
+
+    $('arpAuto').addEventListener('click', () => {
+      state.arpAuto = !state.arpAuto;
+      updateArpBtn();
+    });
+
+    $('arpOctDown').addEventListener('click', () => {
+      state.arpOctave = Math.max(-1, Math.min(1, (state.arpOctave || 0) - 1));
+      updateArpBtn();
+      if (state.arpPlaying) { stopArp(); playArp(); }
+    });
+
+    $('arpOctUp').addEventListener('click', () => {
+      state.arpOctave = Math.max(-1, Math.min(1, (state.arpOctave || 0) + 1));
+      updateArpBtn();
+      if (state.arpPlaying) { stopArp(); playArp(); }
+    });
+
+    $('arpSpeed').addEventListener('click', () => {
+      const idx = [1, 2, 4].indexOf(state.arpSpeed);
+      state.arpSpeed = [1, 2, 4][(idx + 1) % 3];
+      updateArpBtn();
+      if (state.arpPlaying) { stopArp(); playArp(); }
     });
 
     $('scaleSeed').addEventListener('click', () => {
@@ -3084,6 +4192,16 @@
       tryUnlock($('unlockInput').value);
     });
 
+    const buy = $('buyLink');
+    if (buy) {
+      if (PAYPAL_LINK) {
+        buy.href = PAYPAL_LINK;
+        buy.hidden = false;
+      } else {
+        buy.hidden = true;
+      }
+    }
+
     /* ---------- MIDI ---------- */
     $('midiEnable').addEventListener('click', async () => {
       if (!isPro()) { openModal(); return; }
@@ -3154,8 +4272,12 @@
 
     if (params.has('modal')) setTimeout(openModal, 400);
 
-    if (params.has('search') && params.get('search') === 'scales') {
+    if (params.has('search') && params.get('search') === 'arpeggios') {
+      state.searchMode = 'arpeggios';
+      syncSearchButtons();
+    } else if (params.has('search') && params.get('search') === 'scales') {
       state.searchMode = 'scales';
+      syncSearchButtons();
     }
 
     if (params.has('sections')) {
@@ -3189,6 +4311,9 @@
       });
       renderSteps();
     }
+
+    if (params.has('gen')) generateSong(true);
+
 
     if (params.has('type') && T.CHORDS[params.get('type')]) {
       const root = parseInt(params.get('root'), 10);
@@ -3250,9 +4375,13 @@
     A.setDrumVolume(state.drumVolume);
     A.configure({ clickVolume: 0.45 * 0.35 });
     A.setLayerOptions('chord', { gain: state.chordVolume });
+    updateArpBtn();
+    updateTriadBtn();
     syncBassOptions();
     render();
     updateEditUI();
+    updateSeqFile();
+    setTimeout(() => { revalidateLicense(); }, 1500);
     initCardLayout();
     updateGuitarInfo();
     startDonateTimer();
