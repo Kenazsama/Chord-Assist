@@ -6,7 +6,7 @@
 
   const STR = {
     es: {
-      'header.donate': 'Donar',
+      'header.donate': 'Comprar Pro',
       'header.lang': 'Idioma',
 
       'key.space': 'Espacio',
@@ -237,7 +237,7 @@
       'midi.locked': 'MIDI bloqueado',
       'midi.off': 'MIDI apagado',
       'chord.emptyPick': 'Elige notas en el piano o la guitarra, o arma el acorde por tónica y tipo',
-      'midi.unlockHint': 'La salida MIDI y la exportación se desbloquean con el código de donante.',
+      'midi.unlockHint': 'La salida MIDI y la exportación se desbloquean con el código de licencia.',
       'midi.statusNoDevices': 'MIDI activo, pero no hay dispositivos de salida conectados.',
       'midi.statusActive': 'MIDI activo · {n} salida(s) disponible(s).',
       'midi.statusError': 'No se pudo activar MIDI: {err}. Recuerda servir la app por localhost o https.',
@@ -254,7 +254,7 @@
       'msg.editing': 'Editando el acorde seleccionado',
 
       'modal.title': 'Chord Assist es gratis',
-      'modal.body': 'Si la app te resulta útil, puedes invitarme un café y te llevas el código para desbloquear la salida MIDI y la exportación de secuencias.',
+      'modal.body': 'Para desbloquear la salida MIDI y la exportación de secuencias necesitas una licencia. Se paga una sola vez y queda para siempre en este navegador.',
       'modal.link': 'Abrir página de donaciones',
       'modal.unlock': 'Código de licencia',
       'modal.unlockChecking': 'Verificando…',
@@ -268,7 +268,7 @@
     },
 
     en: {
-      'header.donate': 'Donate',
+      'header.donate': 'Buy Pro',
       'header.lang': 'Language',
 
       'key.space': 'Space',
@@ -498,7 +498,7 @@
       'midi.locked': 'MIDI locked',
       'midi.off': 'MIDI off',
       'chord.emptyPick': 'Pick notes on the piano or guitar, or build a chord by root and type',
-      'midi.unlockHint': 'MIDI output and export are unlocked with the donor code.',
+      'midi.unlockHint': 'MIDI output and sequence export unlock with your license code.',
       'midi.statusNoDevices': 'MIDI on, but no output devices connected.',
       'midi.statusActive': 'MIDI on · {n} output(s) available.',
       'midi.statusError': 'Could not enable MIDI: {err}. Remember to serve the app from localhost or https.',
@@ -515,7 +515,7 @@
       'msg.editing': 'Editing the selected chord',
 
       'modal.title': 'Chord Assist is free',
-      'modal.body': 'If the app helps you, you can buy me a coffee and get the code to unlock MIDI output and sequence export.',
+      'modal.body': 'To unlock MIDI output and sequence export you need a license. It is a one-time purchase, tied to this browser.',
       'modal.link': 'Open the donation page',
       'modal.unlock': 'License code',
       'modal.unlockChecking': 'Checking…',

@@ -481,7 +481,7 @@ select optgroup { background: #14161d; color: var(--muted); font-style: normal; 
   flex-wrap: wrap;
 }
 
-.chord-id { min-width: 0; flex: 1; }
+.chord-id { flex: 1 1 220px; min-width: 200px; }
 
 .chord-symbol {
   font-size: 54px;
@@ -565,6 +565,8 @@ select optgroup { background: #14161d; color: var(--muted); font-style: normal; 
   gap: 8px;
   align-items: center;
   flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .play-btn {
@@ -2293,4 +2295,31 @@ input.drum-note {
   text-align: center;
   text-decoration: none;
   margin-top: 10px;
+}
+
+
+/* Acorde abierto dentro de la tarjeta del acorde */
+.chord-open {
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 12px;
+}
+
+.chord-open .open-name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.chord-open #openChord { width: 118px; height: auto; }
+
+.chord-open .open-tuning {
+  margin: 0;
+  font-size: 8px;
+  text-align: center;
 }

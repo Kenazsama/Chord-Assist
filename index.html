@@ -29,7 +29,7 @@
         <button type="button" class="lang-btn is-active" data-lang="es">ES</button>
         <button type="button" class="lang-btn" data-lang="en">EN</button>
       </div>
-      <button id="donateBtn" class="chip-btn" data-i18n="header.donate">Donar</button>
+      <button id="donateBtn" class="chip-btn" data-i18n="header.donate">Comprar Pro</button>
       <span id="midiPill" class="pill-status" data-on="false">MIDI apagado</span>
     </div>
   </header>
@@ -91,17 +91,6 @@
         </div>
       </div>
 
-      <div class="card open-card" data-card="open">
-        <div class="open-head">
-          <h2 data-i18n="open.title">Acorde abierto</h2>
-        </div>
-        <p class="open-tuning" data-i18n="open.tuning">Afinación estándar · MI 440 Hz</p>
-        <div class="open-name" id="openName"></div>
-        <div class="open-body">
-          <svg id="openChord" viewBox="0 0 160 190" role="img" aria-label="Digitación de acorde abierto"></svg>
-        </div>
-      </div>
-
       <div class="card chord-card" data-card="chord">
         <div class="chord-main">
           <div class="chord-id">
@@ -109,6 +98,11 @@
             <div class="chord-symbol" id="chordSymbol">—</div>
             <div class="chord-notes" id="chordNotes"></div>
             <div class="chord-degrees" id="chordDegrees"></div>
+          </div>
+          <div class="chord-open">
+            <div class="open-name" id="openName"></div>
+            <svg id="openChord" viewBox="0 0 160 190" role="img" aria-label="Digitación de acorde abierto"></svg>
+            <p class="open-tuning" data-i18n="open.tuning">Afinación estándar · MI 440 Hz</p>
           </div>
           <div class="chord-actions">
             <button id="playBtn" class="play-btn">
@@ -413,7 +407,7 @@
           <label class="field"><span data-i18n="midi.drums">Batería</span><select id="chDrum"></select></label>
         </div>
         <p class="status" id="midiStatus"></p>
-        <p class="locked-hint" id="midiLockedHint" data-i18n="midi.unlockHint">La salida MIDI y la exportación se desbloquean con el código de donante.</p>
+        <p class="locked-hint" id="midiLockedHint" data-i18n="midi.unlockHint">La salida MIDI y la exportación se desbloquean con el código de licencia.</p>
       </details>
 
     </aside>
@@ -425,14 +419,7 @@
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <button class="modal-x" id="modalClose" aria-label="Cerrar">×</button>
     <h2 id="modalTitle" data-i18n="modal.title">Chord Assist es gratis</h2>
-    <p data-i18n="modal.body">Si la app te resulta útil, puedes invitarme un café y te llevas el código para desbloquear la salida MIDI y la exportación de secuencias.</p>
-
-    <!-- ▼▼ EDITAR ACÁ: tu texto y tu link de donación ▼▼ -->
-    <div class="modal-slot">
-      <p class="edit-me">[ Tu mensaje acá: edita este bloque en index.html ]</p>
-      <a class="modal-link" href="donate.html" target="_blank" rel="noopener" data-i18n="modal.link">Abrir página de donaciones</a>
-    </div>
-    <!-- ▲▲ EDITAR ACÁ ▲▲ -->
+    <p data-i18n="modal.body">Para desbloquear la salida MIDI y la exportación de secuencias necesitas una licencia. Se paga una sola vez y queda para siempre en este navegador.</p>
 
     <form class="unlock-form" id="unlockForm">
       <label class="field">

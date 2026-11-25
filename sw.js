@@ -1,11 +1,13 @@
-/* Service worker mínimo: app offline.
-   Solo se registra cuando la app se sirve por http/https. */
-const CACHE = 'chord-assist-v2';
+/* Service worker: app offline.
+   Estrategia red-primero para que las actualizaciones lleguen siempre,
+   con la copia en caché como respaldo cuando no hay conexión. */
+
+const CACHE = 'chord-assist-v3';
 const ASSETS = [
   './',
   './index.html',
+  './buy.html',
   './css/styles.css',
-  './donate.html',
   './js/theory.js',
   './js/i18n.js',
   './js/audio.js',
@@ -18,7 +20,7 @@ const ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE)
-      .then((cache) => cache.addAll(ASSETS))
+      .then((cache) => cache.addAll(ASSETS).catch(() => { /* si falta uno, seguimos */ }))
       .then(() => self.skipWaiting())
   );
 });
@@ -33,16 +35,20 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return; // PayPal, Resend, etc.
+
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request)
-        .then((response) => {
+    fetch(event.request)
+      .then((response) => {
+        if (response && response.status === 200) {
           const copy = response.clone();
           caches.open(CACHE).then((cache) => cache.put(event.request, copy)).catch(() => {});
-          return response;
-        })
-        .catch(() => caches.match('./index.html'));
-    })
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request)
+        .then((cached) => cached || caches.match('./index.html')))
   );
 });
